@@ -9,12 +9,14 @@ import { ExpertsPage } from '@/components/experts-page';
 import { ProfilePage } from '@/components/profile-page';
 import { ChatbotWidget } from '@/components/chatbot-widget';
 import { Footer } from '@/components/footer';
+import { BackendSync } from '@/components/backend-sync';
 
 export default function App() {
   const { currentView } = useAppStore();
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
+      <BackendSync />
       <Navbar />
       <div className="flex-1">
         {currentView === 'home' && <HomePage />}

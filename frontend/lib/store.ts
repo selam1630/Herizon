@@ -114,6 +114,7 @@ interface AppStore {
   selectedArticle: Article | null;
   articleFilter: ArticleCategory | 'all';
   articleSearch: string;
+  setArticles: (articles: Article[]) => void;
   setArticleFilter: (filter: ArticleCategory | 'all') => void;
   setArticleSearch: (search: string) => void;
   selectArticle: (article: Article | null) => void;
@@ -496,6 +497,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   selectedArticle: null,
   articleFilter: 'all',
   articleSearch: '',
+  setArticles: (articles) => set({ articles }),
 
   setArticleFilter: (filter) => set({ articleFilter: filter }),
   setArticleSearch: (search) => set({ articleSearch: search }),
