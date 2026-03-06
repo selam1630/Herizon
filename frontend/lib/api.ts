@@ -1,6 +1,7 @@
-import type { Article, ArticleCategory } from '@/lib/store';
+import type { Article, ArticleCategory, User } from '@/lib/store';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5000';
+let accessToken: string | null = null;
 
 type ApiArticle = {
   id: string;
@@ -14,11 +15,46 @@ type ApiArticle = {
   timestamp: string;
 };
 
+type ApiUser = {
+  id: string;
+  name: string;
+  email: string;
+  avatar: string;
+  bio: string;
+  isExpert: boolean;
+  createdAt: string;
+};
+
+type AuthPayload = {
+  accessToken: string;
+  user: ApiUser;
+};
+
+type ErrorPayload = {
+  message?: string;
+};
+
 function toArticle(item: ApiArticle): Article {
   return {
     ...item,
     timestamp: new Date(item.timestamp),
   };
+}
+
+function toUser(user: ApiUser): User {
+  return {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    avatar: user.avatar,
+    bio: user.bio,
+    isExpert: user.isExpert,
+    bookmarks: [],
+  };
+}
+
+function setAccessToken(token: string | null) {
+  accessToken = token;
 }
 
 export async function fetchArticles(): Promise<Article[]> {
@@ -32,4 +68,85 @@ export async function fetchArticles(): Promise<Article[]> {
 
   const data = (await response.json()) as ApiArticle[];
   return data.map(toArticle);
+}
+
+async function postAuth(endpoint: 'signup' | 'signin', body: { name?: string; email: string; password: string }) {
+  const response = await fetch(`${API_BASE_URL}/api/v1/auth/${endpoint}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    credentials: 'include',
+    body: JSON.stringify(body),
+  });
+
+  const data = (await response.json()) as AuthPayload | ErrorPayload;
+  if (!response.ok) {
+    const message = (data as ErrorPayload).message || `Auth request failed with status ${response.status}`;
+    throw new Error(message);
+  }
+
+  const payload = data as AuthPayload;
+  setAccessToken(payload.accessToken);
+
+  return {
+    user: toUser(payload.user),
+  };
+}
+
+export function signUp(body: { name: string; email: string; password: string }) {
+  return postAuth('signup', body);
+}
+
+export function signIn(body: { email: string; password: string }) {
+  return postAuth('signin', body);
+}
+
+export async function refreshSession(): Promise<User> {
+  const response = await fetch(`${API_BASE_URL}/api/v1/auth/refresh`, {
+    method: 'POST',
+    credentials: 'include',
+  });
+
+  const data = (await response.json()) as AuthPayload | ErrorPayload;
+  if (!response.ok) {
+    setAccessToken(null);
+    const message = (data as ErrorPayload).message || 'Failed to refresh session';
+    throw new Error(message);
+  }
+
+  const payload = data as AuthPayload;
+  setAccessToken(payload.accessToken);
+  return toUser(payload.user);
+}
+
+export async function signOutSession() {
+  try {
+    await fetch(`${API_BASE_URL}/api/v1/auth/signout`, {
+      method: 'POST',
+      credentials: 'include',
+    });
+  } finally {
+    setAccessToken(null);
+  }
+}
+
+export async function fetchCurrentUser(): Promise<User> {
+  if (!accessToken) {
+    throw new Error('No access token available');
+  }
+
+  const response = await fetch(`${API_BASE_URL}/api/v1/auth/me`, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+    cache: 'no-store',
+  });
+
+  const data = (await response.json()) as { user?: ApiUser; message?: string };
+  if (!response.ok || !data.user) {
+    throw new Error(data.message || 'Failed to fetch current user');
+  }
+
+  return toUser(data.user);
 }

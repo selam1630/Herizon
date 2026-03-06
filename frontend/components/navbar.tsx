@@ -1,6 +1,7 @@
 'use client';
 
 import { useAppStore, type View } from '@/lib/store';
+import { signOutSession } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
@@ -22,13 +23,18 @@ const navItems: { label: string; view: View; icon: React.ReactNode }[] = [
 ];
 
 export function Navbar() {
-  const { currentView, setView, currentUser } = useAppStore();
+  const { currentView, setView, currentUser, signOut } = useAppStore();
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const initials = currentUser.name
     .split(' ')
     .map((n) => n[0])
     .join('');
+
+  const handleSignOut = async () => {
+    await signOutSession();
+    signOut();
+  };
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border bg-card/90 backdrop-blur-sm">
@@ -91,7 +97,7 @@ export function Navbar() {
                 My Profile
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem className="gap-2 text-destructive cursor-pointer">
+              <DropdownMenuItem onClick={() => void handleSignOut()} className="gap-2 text-destructive cursor-pointer">
                 <LogOut className="h-4 w-4" />
                 Sign Out
               </DropdownMenuItem>

@@ -10,9 +10,14 @@ import { ProfilePage } from '@/components/profile-page';
 import { ChatbotWidget } from '@/components/chatbot-widget';
 import { Footer } from '@/components/footer';
 import { BackendSync } from '@/components/backend-sync';
+import { AuthGate } from '@/components/auth-gate';
 
 export default function App() {
-  const { currentView } = useAppStore();
+  const { currentView, isAuthenticated } = useAppStore();
+
+  if (!isAuthenticated) {
+    return <AuthGate />;
+  }
 
   return (
     <div className="flex min-h-screen flex-col bg-background">

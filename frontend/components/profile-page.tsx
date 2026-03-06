@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useAppStore } from '@/lib/store';
+import { signOutSession } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -12,7 +13,7 @@ import { Separator } from '@/components/ui/separator';
 import { Pencil, Check, BookmarkCheck, MessageCircle, Heart } from 'lucide-react';
 
 export function ProfilePage() {
-  const { currentUser, updateProfile, posts, articles } = useAppStore();
+  const { currentUser, updateProfile, posts, articles, signOut } = useAppStore();
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(currentUser.name);
   const [bio, setBio] = useState(currentUser.bio);
@@ -40,6 +41,11 @@ export function ProfilePage() {
     .split(' ')
     .map((n) => n[0])
     .join('');
+
+  const handleSignOut = async () => {
+    await signOutSession();
+    signOut();
+  };
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-8 sm:px-6 lg:px-8">
@@ -199,7 +205,12 @@ export function ProfilePage() {
         <p className="mt-1 text-xs text-muted-foreground">
           Sign out of your account or manage your data.
         </p>
-        <Button variant="outline" size="sm" className="mt-3 border-destructive/30 text-destructive hover:bg-destructive/10">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => void handleSignOut()}
+          className="mt-3 border-destructive/30 text-destructive hover:bg-destructive/10"
+        >
           Sign Out
         </Button>
       </div>

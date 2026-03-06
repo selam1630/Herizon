@@ -332,7 +332,7 @@ export function HomePage() {
             {features.map((feature) => {
               const Icon = feature.icon;
               const handleClick = () => {
-                if ('view' in feature) setView(feature.view);
+                if ('view' in feature && feature.view) setView(feature.view);
                 else setChatOpen(true);
               };
 

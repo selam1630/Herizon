@@ -10,6 +10,7 @@ export type View = 'home' | 'feed' | 'learn' | 'experts' | 'profile';
 export interface User {
   id: string;
   name: string;
+  email: string;
   avatar: string;
   bio: string;
   isExpert: boolean;
@@ -88,6 +89,11 @@ interface AppStore {
   currentView: View;
   setView: (view: View) => void;
 
+  // Auth
+  isAuthenticated: boolean;
+  setAuthenticatedUser: (user: User) => void;
+  signOut: () => void;
+
   // Current user (mock auth)
   currentUser: User;
   updateProfile: (updates: Partial<User>) => void;
@@ -146,6 +152,7 @@ interface AppStore {
 const mockUser: User = {
   id: 'u1',
   name: 'Sarah Chen',
+  email: 'sarah@example.com',
   avatar: '/placeholder-user.jpg',
   bio: 'First-time mom to a 6-month-old. Love connecting with other moms!',
   isExpert: false,
@@ -406,6 +413,21 @@ export const useAppStore = create<AppStore>((set, get) => ({
   // Navigation
   currentView: 'home',
   setView: (view) => set({ currentView: view }),
+
+  // Auth
+  isAuthenticated: false,
+  setAuthenticatedUser: (user) =>
+    set({
+      currentUser: user,
+      isAuthenticated: true,
+      currentView: 'home',
+    }),
+  signOut: () =>
+    set({
+      currentUser: mockUser,
+      isAuthenticated: false,
+      currentView: 'home',
+    }),
 
   // User
   currentUser: mockUser,

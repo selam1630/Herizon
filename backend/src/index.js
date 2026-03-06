@@ -1,13 +1,16 @@
 require('dotenv').config()
 
 const app = require('./app')
-const { verifyDatabaseConnection } = require('./db')
+const { verifyDatabaseConnection, initializeDatabase } = require('./db')
+const { assertJwtConfig } = require('./utils/jwt')
 
 const port = Number(process.env.PORT || 5000)
 
 async function startServer() {
   try {
+    assertJwtConfig()
     await verifyDatabaseConnection()
+    await initializeDatabase()
     console.log('Connected to Neon Postgres')
 
     const server = app.listen(port, () => {
@@ -24,7 +27,10 @@ async function startServer() {
       process.exit(1)
     })
   } catch (error) {
-    console.error('Failed to connect to database:', error.message)
+    console.error('Startup failed.')
+    console.error('Reason:', error?.message || String(error))
+    if (error?.code) console.error('Code:', error.code)
+    if (error?.stack) console.error(error.stack)
     process.exit(1)
   }
 }
