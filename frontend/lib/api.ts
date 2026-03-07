@@ -62,6 +62,8 @@ type ApiQuestion = {
   timestamp: string;
   answerCount: number;
   isAnonymous: boolean;
+  targetExpertId?: string | null;
+  targetExpertName?: string | null;
 };
 
 type ApiAnswer = {
@@ -154,6 +156,38 @@ export type AdminExpertApplication = ExpertApplication & {
   userEmail: string;
 };
 
+export type ExpertArticleSubmission = {
+  id: string;
+  title: string;
+  excerpt: string;
+  content: string;
+  category: ArticleCategory;
+  tags: string[];
+  readTime: number;
+  status: 'pending' | 'approved' | 'rejected';
+  reviewedNote: string;
+  reviewedAt: Date | null;
+  publishedAt: Date | null;
+  createdAt: Date;
+};
+
+export type AdminPendingArticle = {
+  id: string;
+  title: string;
+  excerpt: string;
+  category: ArticleCategory;
+  tags: string[];
+  readTime: number;
+  status: 'pending' | 'approved' | 'rejected';
+  reviewedNote: string;
+  reviewedAt: Date | null;
+  publishedAt: Date | null;
+  createdAt: Date;
+  authorId: string;
+  authorName: string;
+  authorEmail: string;
+};
+
 type AuthPayload = {
   accessToken: string;
   user: ApiUser;
@@ -239,17 +273,25 @@ function setAccessToken(token: string | null) {
   accessToken = token;
 }
 
+export async function getAccessToken(): Promise<string> {
+  await ensureAccessToken();
+  if (!accessToken) {
+    throw new Error('No access token available');
+  }
+  return accessToken;
+}
+
 export async function fetchArticles(): Promise<Article[]> {
-  const response = await fetch(`${API_BASE_URL}/api/v1/articles`, {
-    cache: 'no-store',
+  const response = await authRequest('/api/v1/articles', {
+    method: 'GET',
   });
 
-  if (!response.ok) {
-    throw new Error(`Failed to load articles: ${response.status}`);
+  const data = (await response.json()) as { articles?: ApiArticle[]; message?: string };
+  if (!response.ok || !data.articles) {
+    throw new Error(data.message || `Failed to load articles: ${response.status}`);
   }
 
-  const data = (await response.json()) as ApiArticle[];
-  return data.map(toArticle);
+  return data.articles.map(toArticle);
 }
 
 async function ensureAccessToken() {
@@ -476,6 +518,7 @@ export async function createExpertQuestion(body: {
   question: string;
   topic: ExpertTopic;
   isAnonymous: boolean;
+  targetExpertId?: string | null;
 }): Promise<Question> {
   const response = await authRequest('/api/v1/experts/questions', {
     method: 'POST',
@@ -555,6 +598,85 @@ export async function createExpertApplication(body: {
   }
 
   return toExpertApplication(data.application);
+}
+
+function toExpertArticleSubmission(
+  item: Omit<ExpertArticleSubmission, 'reviewedAt' | 'publishedAt' | 'createdAt'> & {
+    reviewedAt: string | null;
+    publishedAt: string | null;
+    createdAt: string;
+  }
+): ExpertArticleSubmission {
+  return {
+    ...item,
+    reviewedAt: item.reviewedAt ? new Date(item.reviewedAt) : null,
+    publishedAt: item.publishedAt ? new Date(item.publishedAt) : null,
+    createdAt: new Date(item.createdAt),
+  };
+}
+
+function toAdminPendingArticle(
+  item: Omit<AdminPendingArticle, 'reviewedAt' | 'publishedAt' | 'createdAt'> & {
+    reviewedAt: string | null;
+    publishedAt: string | null;
+    createdAt: string;
+  }
+): AdminPendingArticle {
+  return {
+    ...item,
+    reviewedAt: item.reviewedAt ? new Date(item.reviewedAt) : null,
+    publishedAt: item.publishedAt ? new Date(item.publishedAt) : null,
+    createdAt: new Date(item.createdAt),
+  };
+}
+
+export async function createExpertArticle(body: {
+  title: string;
+  excerpt?: string;
+  content: string;
+  category: ArticleCategory;
+  tags?: string[];
+}): Promise<ExpertArticleSubmission> {
+  const response = await authRequest('/api/v1/experts/articles', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+
+  const data = (await response.json()) as {
+    article?: Omit<ExpertArticleSubmission, 'reviewedAt' | 'publishedAt' | 'createdAt'> & {
+      reviewedAt: string | null;
+      publishedAt: string | null;
+      createdAt: string;
+    };
+    message?: string;
+  };
+
+  if (!response.ok || !data.article) {
+    throw new Error(data.message || 'Failed to submit expert article');
+  }
+
+  return toExpertArticleSubmission(data.article);
+}
+
+export async function fetchMyExpertArticles(): Promise<ExpertArticleSubmission[]> {
+  const response = await authRequest('/api/v1/experts/articles/me', {
+    method: 'GET',
+  });
+
+  const data = (await response.json()) as {
+    articles?: Array<Omit<ExpertArticleSubmission, 'reviewedAt' | 'publishedAt' | 'createdAt'> & {
+      reviewedAt: string | null;
+      publishedAt: string | null;
+      createdAt: string;
+    }>;
+    message?: string;
+  };
+  if (!response.ok || !data.articles) {
+    throw new Error(data.message || 'Failed to load your submitted articles');
+  }
+
+  return data.articles.map(toExpertArticleSubmission);
 }
 
 export async function fetchAdminUsers(onlyUnverifiedExperts = false): Promise<AdminUser[]> {
@@ -681,6 +803,51 @@ export async function fetchAdminExpertApplications(): Promise<AdminExpertApplica
   }));
 }
 
+export async function fetchAdminPendingArticles(): Promise<AdminPendingArticle[]> {
+  const response = await authRequest('/api/v1/admin/articles/pending', {
+    method: 'GET',
+  });
+
+  const data = (await response.json()) as {
+    articles?: Array<Omit<AdminPendingArticle, 'reviewedAt' | 'publishedAt' | 'createdAt'> & {
+      reviewedAt: string | null;
+      publishedAt: string | null;
+      createdAt: string;
+    }>;
+    message?: string;
+  };
+  if (!response.ok || !data.articles) {
+    throw new Error(data.message || 'Failed to load pending articles');
+  }
+
+  return data.articles.map(toAdminPendingArticle);
+}
+
+export async function reviewAdminArticle(
+  articleId: string,
+  review: { decision: 'approved' | 'rejected'; reviewedNote?: string }
+): Promise<AdminPendingArticle> {
+  const response = await authRequest(`/api/v1/admin/articles/${articleId}/review`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(review),
+  });
+
+  const data = (await response.json()) as {
+    article?: Omit<AdminPendingArticle, 'reviewedAt' | 'publishedAt' | 'createdAt'> & {
+      reviewedAt: string | null;
+      publishedAt: string | null;
+      createdAt: string;
+    };
+    message?: string;
+  };
+  if (!response.ok || !data.article) {
+    throw new Error(data.message || 'Failed to review article');
+  }
+
+  return toAdminPendingArticle(data.article);
+}
+
 export async function reviewAdminExpertApplication(
   applicationId: string,
   review: { decision: 'approved' | 'rejected'; reviewedNote?: string }
@@ -740,6 +907,15 @@ export type PaymentInitializeResponse = {
   premiumDays?: number;
 };
 
+export type ConsultationMessage = {
+  id: string;
+  txRef: string;
+  senderUserId: string;
+  senderName: string;
+  content: string;
+  createdAt: Date;
+};
+
 export async function fetchMyExpertPricing(): Promise<ExpertPricing> {
   const response = await authRequest('/api/v1/experts/me/pricing', {
     method: 'GET',
@@ -772,7 +948,10 @@ export async function updateMyExpertPricing(body: {
   return data.pricing;
 }
 
-export async function initializePremiumPayment(body: { phoneNumber: string }): Promise<PaymentInitializeResponse> {
+export async function initializePremiumPayment(body: {
+  phoneNumber?: string;
+  paymentProvider?: 'mpesa' | 'chapa';
+}): Promise<PaymentInitializeResponse> {
   const response = await authRequest('/api/v1/payments/premium/initialize', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -790,7 +969,8 @@ export async function initializePremiumPayment(body: { phoneNumber: string }): P
 export async function initializeExpertCommunicationPayment(body: {
   expertId: string;
   mode: 'chat' | 'voice' | 'video';
-  phoneNumber: string;
+  phoneNumber?: string;
+  paymentProvider?: 'mpesa' | 'chapa';
 }): Promise<PaymentInitializeResponse> {
   const response = await authRequest('/api/v1/payments/expert-communication/initialize', {
     method: 'POST',
@@ -810,6 +990,10 @@ export async function verifyPayment(txRef: string): Promise<{
   txRef: string;
   status: string;
   kind: 'premium_subscription' | 'expert_consultation';
+  paymentProvider?: string;
+  serviceType?: 'chat' | 'voice' | 'video' | 'premium' | null;
+  expertUserId?: string | null;
+  expertName?: string | null;
   pricing: PaymentBreakdown;
 }> {
   const response = await authRequest(`/api/v1/payments/${encodeURIComponent(txRef)}/verify`, {
@@ -820,6 +1004,10 @@ export async function verifyPayment(txRef: string): Promise<{
     txRef?: string;
     status?: string;
     kind?: 'premium_subscription' | 'expert_consultation';
+    paymentProvider?: string;
+    serviceType?: 'chat' | 'voice' | 'video' | 'premium' | null;
+    expertUserId?: string | null;
+    expertName?: string | null;
     pricing?: PaymentBreakdown;
     message?: string;
   };
@@ -831,6 +1019,64 @@ export async function verifyPayment(txRef: string): Promise<{
     txRef: data.txRef,
     status: data.status,
     kind: data.kind,
+    paymentProvider: data.paymentProvider,
+    serviceType: data.serviceType,
+    expertUserId: data.expertUserId,
+    expertName: data.expertName,
     pricing: data.pricing,
+  };
+}
+
+export async function fetchConsultationMessages(txRef: string): Promise<ConsultationMessage[]> {
+  const response = await authRequest(`/api/v1/payments/${encodeURIComponent(txRef)}/messages`, {
+    method: 'GET',
+  });
+  const data = (await response.json()) as {
+    messages?: Array<{
+      id: string;
+      txRef: string;
+      senderUserId: string;
+      senderName: string;
+      content: string;
+      createdAt: string;
+    }>;
+    message?: string;
+  };
+
+  if (!response.ok || !data.messages) {
+    throw new Error(data.message || 'Failed to fetch consultation messages');
+  }
+
+  return data.messages.map((item) => ({
+    ...item,
+    createdAt: new Date(item.createdAt),
+  }));
+}
+
+export async function sendConsultationMessage(txRef: string, content: string): Promise<ConsultationMessage> {
+  const response = await authRequest(`/api/v1/payments/${encodeURIComponent(txRef)}/messages`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ content }),
+  });
+  const data = (await response.json()) as {
+    message?: string;
+    chatMessage?: {
+      id: string;
+      txRef: string;
+      senderUserId: string;
+      senderName: string;
+      content: string;
+      createdAt: string;
+    };
+  };
+
+  if (!response.ok || !data.chatMessage) {
+    throw new Error(data.message || 'Failed to send consultation message');
+  }
+
+  return {
+    ...data.chatMessage,
+    createdAt: new Date(data.chatMessage.createdAt),
   };
 }

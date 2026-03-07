@@ -5,7 +5,16 @@ import { create } from 'zustand';
 export type PostCategory = 'pregnancy' | 'parenting' | 'health' | 'general';
 export type ArticleCategory = 'pregnancy' | 'parenting' | 'health' | 'nutrition';
 export type ExpertTopic = 'medical' | 'mental_health' | 'nutrition' | 'parenting';
-export type View = 'home' | 'feed' | 'learn' | 'experts' | 'admin' | 'profile';
+export type ConsultationMode = 'chat' | 'voice' | 'video';
+export type View = 'home' | 'feed' | 'learn' | 'experts' | 'admin' | 'profile' | 'consultation';
+
+export interface ActiveConsultation {
+  txRef: string;
+  expertId: string;
+  expertName: string;
+  mode: ConsultationMode;
+  startedAt: Date;
+}
 
 export interface User {
   id: string;
@@ -66,6 +75,8 @@ export interface Question {
   timestamp: Date;
   answerCount: number;
   isAnonymous: boolean;
+  targetExpertId?: string | null;
+  targetExpertName?: string | null;
 }
 
 export interface Answer {
@@ -100,6 +111,9 @@ interface AppStore {
   // Current user (mock auth)
   currentUser: User;
   updateProfile: (updates: Partial<User>) => void;
+  activeConsultation: ActiveConsultation | null;
+  setActiveConsultation: (consultation: ActiveConsultation | null) => void;
+  clearActiveConsultation: () => void;
 
   // Posts
   posts: Post[];
@@ -474,6 +488,9 @@ export const useAppStore = create<AppStore>((set, get) => ({
   currentUser: mockUser,
   updateProfile: (updates) =>
     set((s) => ({ currentUser: { ...s.currentUser, ...updates } })),
+  activeConsultation: null,
+  setActiveConsultation: (consultation) => set({ activeConsultation: consultation }),
+  clearActiveConsultation: () => set({ activeConsultation: null }),
 
   // ── Posts ──────────────────────────────────────────────────────────────────
   posts: mockPosts,

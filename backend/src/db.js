@@ -103,11 +103,22 @@ async function initializeDatabase() {
     CREATE TABLE IF NOT EXISTS expert_questions (
       id TEXT PRIMARY KEY,
       user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      target_expert_user_id TEXT NULL REFERENCES users(id) ON DELETE SET NULL,
       question TEXT NOT NULL,
       topic TEXT NOT NULL CHECK (topic IN ('medical', 'mental_health', 'nutrition', 'parenting')),
       is_anonymous BOOLEAN NOT NULL DEFAULT FALSE,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+  `)
+
+  await pool.query(`
+    ALTER TABLE expert_questions
+    ADD COLUMN IF NOT EXISTS target_expert_user_id TEXT NULL REFERENCES users(id) ON DELETE SET NULL;
+  `)
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS expert_questions_target_expert_idx
+    ON expert_questions (target_expert_user_id);
   `)
 
   await pool.query(`
@@ -190,6 +201,21 @@ async function initializeDatabase() {
   `)
 
   await pool.query(`
+    CREATE TABLE IF NOT EXISTS consultation_messages (
+      id TEXT PRIMARY KEY,
+      tx_ref TEXT NOT NULL REFERENCES payment_transactions(tx_ref) ON DELETE CASCADE,
+      sender_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      content TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `)
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS consultation_messages_tx_ref_created_at_idx
+    ON consultation_messages (tx_ref, created_at ASC);
+  `)
+
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS voice_calls (
       id TEXT PRIMARY KEY,
       caller TEXT NOT NULL DEFAULT '',
@@ -224,6 +250,36 @@ async function initializeDatabase() {
   await pool.query(`
     CREATE INDEX IF NOT EXISTS chat_messages_created_at_idx
     ON chat_messages (created_at DESC);
+  `)
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS expert_articles (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      title TEXT NOT NULL,
+      excerpt TEXT NOT NULL DEFAULT '',
+      content TEXT NOT NULL,
+      category TEXT NOT NULL CHECK (category IN ('pregnancy', 'parenting', 'health', 'nutrition')),
+      tags TEXT[] NOT NULL DEFAULT '{}',
+      read_time_minutes INTEGER NOT NULL DEFAULT 5,
+      status TEXT NOT NULL CHECK (status IN ('pending', 'approved', 'rejected')) DEFAULT 'pending',
+      reviewed_by TEXT NULL REFERENCES users(id) ON DELETE SET NULL,
+      reviewed_note TEXT NOT NULL DEFAULT '',
+      reviewed_at TIMESTAMPTZ NULL,
+      published_at TIMESTAMPTZ NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `)
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS expert_articles_status_created_at_idx
+    ON expert_articles (status, created_at DESC);
+  `)
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS expert_articles_user_created_at_idx
+    ON expert_articles (user_id, created_at DESC);
   `)
 
   const adminEmails = getAdminEmails()

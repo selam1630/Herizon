@@ -16,20 +16,35 @@ export function BackendSync() {
 
     async function load() {
       try {
-        const [articles, community, experts] = await Promise.all([
-          fetchArticles(),
-          fetchCommunityData(),
-          fetchExpertData(),
-        ]);
+        const community = await fetchCommunityData();
         if (active) {
-          setArticles(articles);
           setPosts(community.posts);
           setPostComments(community.comments);
+        }
+      } catch (error) {
+        console.error('Community sync failed.', error);
+      }
+
+      try {
+        const experts = await fetchExpertData();
+        if (active) {
           setQuestions(experts.questions);
           setAnswers(experts.answers);
         }
       } catch (error) {
-        console.error('Backend sync failed, using local fallback data.', error);
+        console.error('Experts sync failed.', error);
+      }
+
+      try {
+        const articles = await fetchArticles();
+        if (active) {
+          setArticles(articles);
+        }
+      } catch (error) {
+        if (active) {
+          setArticles([]);
+        }
+        console.error('Articles sync failed.', error);
       }
     }
 

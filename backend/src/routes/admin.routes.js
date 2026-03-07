@@ -7,6 +7,25 @@ const router = express.Router()
 
 router.use(requireAuth, requireAdmin)
 
+function toAdminArticle(row) {
+  return {
+    id: row.id,
+    title: row.title,
+    excerpt: row.excerpt || '',
+    category: row.category,
+    tags: Array.isArray(row.tags) ? row.tags : [],
+    readTime: Number(row.read_time_minutes || 1),
+    status: row.status,
+    reviewedNote: row.reviewed_note || '',
+    reviewedAt: row.reviewed_at,
+    publishedAt: row.published_at,
+    createdAt: row.created_at,
+    authorId: row.user_id,
+    authorName: row.author_name,
+    authorEmail: row.author_email,
+  }
+}
+
 router.get('/users', async (req, res) => {
   try {
     const onlyUnverifiedExperts = req.query.onlyUnverifiedExperts === 'true'
@@ -316,6 +335,110 @@ router.patch('/experts/applications/:applicationId', async (req, res) => {
     })
   } catch (error) {
     return res.status(500).json({ message: 'Failed to review application', error: error.message })
+  }
+})
+
+router.get('/articles/pending', async (_req, res) => {
+  try {
+    const result = await pool.query(
+      `
+        SELECT
+          a.id,
+          a.user_id,
+          a.title,
+          a.excerpt,
+          a.category,
+          a.tags,
+          a.read_time_minutes,
+          a.status,
+          a.reviewed_note,
+          a.reviewed_at,
+          a.published_at,
+          a.created_at,
+          u.name AS author_name,
+          u.email AS author_email
+        FROM expert_articles a
+        JOIN users u ON u.id = a.user_id
+        WHERE a.status = 'pending'
+        ORDER BY a.created_at DESC
+      `
+    )
+
+    return res.status(200).json({ articles: result.rows.map(toAdminArticle) })
+  } catch (error) {
+    return res.status(500).json({ message: 'Failed to fetch pending expert articles', error: error.message })
+  }
+})
+
+router.patch('/articles/:articleId/review', async (req, res) => {
+  try {
+    const articleId = String(req.params.articleId || '').trim()
+    const decision = String(req.body.decision || '').trim().toLowerCase()
+    const reviewedNote = String(req.body.reviewedNote || '').trim()
+    if (!['approved', 'rejected'].includes(decision)) {
+      return res.status(400).json({ message: 'Decision must be approved or rejected' })
+    }
+
+    const existing = await pool.query(
+      `
+        SELECT id, status
+        FROM expert_articles
+        WHERE id = $1
+        LIMIT 1
+      `,
+      [articleId]
+    )
+
+    if (existing.rowCount === 0) {
+      return res.status(404).json({ message: 'Article not found' })
+    }
+    if (existing.rows[0].status !== 'pending') {
+      return res.status(409).json({ message: 'This article has already been reviewed' })
+    }
+
+    await pool.query(
+      `
+        UPDATE expert_articles
+        SET
+          status = $1,
+          reviewed_by = $2,
+          reviewed_note = $3,
+          reviewed_at = NOW(),
+          published_at = CASE WHEN $1 = 'approved' THEN NOW() ELSE NULL END,
+          updated_at = NOW()
+        WHERE id = $4
+      `,
+      [decision, req.auth.sub, reviewedNote, articleId]
+    )
+
+    const updated = await pool.query(
+      `
+        SELECT
+          a.id,
+          a.user_id,
+          a.title,
+          a.excerpt,
+          a.category,
+          a.tags,
+          a.read_time_minutes,
+          a.status,
+          a.reviewed_note,
+          a.reviewed_at,
+          a.published_at,
+          a.created_at,
+          u.name AS author_name,
+          u.email AS author_email
+        FROM expert_articles a
+        JOIN users u ON u.id = a.user_id
+        WHERE a.id = $1
+        LIMIT 1
+      `,
+      [articleId]
+    )
+
+    return res.status(200).json({ article: toAdminArticle(updated.rows[0]) })
+  } catch (error) {
+    return res.status(500).json({ message: 'Failed to review article', error: error.message })
   }
 })
 

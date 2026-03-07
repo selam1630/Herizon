@@ -2,9 +2,11 @@
 
 import { useState } from 'react';
 import { useAppStore, type ArticleCategory } from '@/lib/store';
+import { createExpertArticle, fetchArticles } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Separator } from '@/components/ui/separator';
 import {
   BookOpen,
@@ -16,6 +18,7 @@ import {
   X,
   Tag,
   ChevronRight,
+  Crown,
 } from 'lucide-react';
 
 const C2 = '#CB978E';
@@ -117,10 +120,20 @@ export function LearnPage() {
     currentUser,
     toggleBookmark,
     articles,
+    setArticles,
+    setView,
   } = useAppStore();
 
   const [selectedArticleId, setSelectedArticleId] = useState<string | null>(null);
   const [showBookmarks, setShowBookmarks] = useState(false);
+  const [submitTitle, setSubmitTitle] = useState('');
+  const [submitExcerpt, setSubmitExcerpt] = useState('');
+  const [submitCategory, setSubmitCategory] = useState<ArticleCategory>('health');
+  const [submitTags, setSubmitTags] = useState('');
+  const [submitContent, setSubmitContent] = useState('');
+  const [submitBusy, setSubmitBusy] = useState(false);
+  const [submitError, setSubmitError] = useState('');
+  const [submitSuccess, setSubmitSuccess] = useState('');
 
   const filteredArticles = getFilteredArticles();
   const displayArticles = showBookmarks
@@ -129,12 +142,117 @@ export function LearnPage() {
 
   const featured = articles[0] ?? null;
 
+  const handleSubmitArticle = async () => {
+    setSubmitError('');
+    setSubmitSuccess('');
+    if (!submitTitle.trim() || !submitContent.trim()) {
+      setSubmitError('Title and content are required.');
+      return;
+    }
+    setSubmitBusy(true);
+    try {
+      const tags = submitTags
+        .split(',')
+        .map((t) => t.trim().toLowerCase())
+        .filter(Boolean);
+      await createExpertArticle({
+        title: submitTitle.trim(),
+        excerpt: submitExcerpt.trim() || undefined,
+        content: submitContent.trim(),
+        category: submitCategory,
+        tags,
+      });
+      setSubmitSuccess('Article submitted for admin approval.');
+      setSubmitTitle('');
+      setSubmitExcerpt('');
+      setSubmitTags('');
+      setSubmitContent('');
+      if (currentUser.isPremium) {
+        const refreshed = await fetchArticles();
+        setArticles(refreshed);
+      }
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : 'Failed to submit article');
+    } finally {
+      setSubmitBusy(false);
+    }
+  };
+
   if (selectedArticleId) {
     return <ArticleDetail articleId={selectedArticleId} onBack={() => setSelectedArticleId(null)} />;
   }
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
+      {currentUser.isExpert && (
+        <div className="mb-7 rounded-2xl border border-[#ecddd9] bg-white p-5 sm:p-6">
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <h2 className="text-lg font-semibold text-foreground">Submit Expert Article</h2>
+            <Badge variant="outline" className="border-[#cb978e]/30 text-[#cb978e]">Admin approval required</Badge>
+          </div>
+          <p className="mb-4 text-xs text-muted-foreground">
+            Your article will be reviewed by admin before publishing.
+          </p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Input
+              placeholder="Article title"
+              value={submitTitle}
+              onChange={(e) => setSubmitTitle(e.target.value)}
+            />
+            <select
+              className="h-10 rounded-xl border border-[#ecddd9] bg-white px-3 text-sm text-foreground"
+              value={submitCategory}
+              onChange={(e) => setSubmitCategory(e.target.value as ArticleCategory)}
+            >
+              <option value="pregnancy">Pregnancy</option>
+              <option value="parenting">Parenting</option>
+              <option value="health">Health</option>
+              <option value="nutrition">Nutrition</option>
+            </select>
+          </div>
+          <Input
+            className="mt-3"
+            placeholder="Short excerpt (optional)"
+            value={submitExcerpt}
+            onChange={(e) => setSubmitExcerpt(e.target.value)}
+          />
+          <Input
+            className="mt-3"
+            placeholder="Tags separated by commas (e.g. newborn, sleep)"
+            value={submitTags}
+            onChange={(e) => setSubmitTags(e.target.value)}
+          />
+          <Textarea
+            className="mt-3 min-h-[140px]"
+            placeholder="Write your educational content..."
+            value={submitContent}
+            onChange={(e) => setSubmitContent(e.target.value)}
+          />
+          {submitError && <p className="mt-2 text-xs text-destructive">{submitError}</p>}
+          {submitSuccess && <p className="mt-2 text-xs text-green-600">{submitSuccess}</p>}
+          <Button className="mt-3" onClick={() => void handleSubmitArticle()} disabled={submitBusy}>
+            {submitBusy ? 'Submitting...' : 'Submit For Approval'}
+          </Button>
+        </div>
+      )}
+
+      {!currentUser.isPremium && (
+        <div className="rounded-2xl border border-[#ecddd9] bg-white p-8 text-center">
+          <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-[#f9ede9]">
+            <Crown className="h-6 w-6 text-[#cb978e]" />
+          </div>
+          <h2 className="text-lg font-semibold text-foreground">Premium Content</h2>
+          <p className="mx-auto mt-2 max-w-xl text-sm text-muted-foreground">
+            Expert articles are available to premium members only. Upgrade to read approved learning content.
+          </p>
+          <Button className="mt-4" onClick={() => setView('profile')}>
+            Upgrade to Premium
+          </Button>
+        </div>
+      )}
+
+      {currentUser.isPremium && (
+      <>
       <div
         className="mb-7 overflow-hidden rounded-3xl border"
         style={{
@@ -308,6 +426,8 @@ export function LearnPage() {
             );
           })}
         </div>
+      )}
+      </>
       )}
     </div>
   );

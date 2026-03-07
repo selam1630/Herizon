@@ -7,6 +7,7 @@ const { requireAuth } = require('../middleware/auth.middleware')
 const router = express.Router()
 const MAX_EVIDENCE_PHOTOS = 3
 const MAX_EVIDENCE_PHOTO_CHARS = 3_000_000
+const ARTICLE_CATEGORIES = new Set(['pregnancy', 'parenting', 'health', 'nutrition'])
 
 function normalizeEvidencePhotos(value) {
   if (value == null) {
@@ -55,6 +56,8 @@ function toQuestion(row) {
     timestamp: row.created_at,
     answerCount: Number(row.answer_count || 0),
     isAnonymous: row.is_anonymous,
+    targetExpertId: row.target_expert_user_id || null,
+    targetExpertName: row.target_expert_name || null,
   }
 }
 
@@ -91,6 +94,45 @@ function toApplication(row) {
   }
 }
 
+function normalizeArticleTags(value) {
+  if (value == null) return []
+  if (!Array.isArray(value)) return null
+  const tags = []
+  for (const item of value) {
+    if (typeof item !== 'string') return null
+    const normalized = item.trim().toLowerCase()
+    if (!normalized) continue
+    if (normalized.length > 40) return null
+    tags.push(normalized)
+  }
+  return Array.from(new Set(tags)).slice(0, 8)
+}
+
+function estimateReadTimeMinutes(content) {
+  const words = String(content || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean).length
+  return Math.max(1, Math.round(words / 200))
+}
+
+function toMyArticle(row) {
+  return {
+    id: row.id,
+    title: row.title,
+    excerpt: row.excerpt || '',
+    content: row.content,
+    category: row.category,
+    tags: Array.isArray(row.tags) ? row.tags : [],
+    readTime: Number(row.read_time_minutes || 1),
+    status: row.status,
+    reviewedNote: row.reviewed_note || '',
+    reviewedAt: row.reviewed_at,
+    publishedAt: row.published_at,
+    createdAt: row.created_at,
+  }
+}
+
 router.get('/verified', async (_req, res) => {
   try {
     const result = await pool.query(
@@ -104,7 +146,7 @@ router.get('/verified', async (_req, res) => {
           a.voice_price_usd,
           a.video_price_usd
         FROM users u
-        LEFT JOIN LATERAL (
+        JOIN LATERAL (
           SELECT specialty, chat_price_usd, voice_price_usd, video_price_usd
           FROM expert_applications
           WHERE user_id = u.id AND status = 'approved'
@@ -301,6 +343,83 @@ router.patch('/me/pricing', requireAuth, async (req, res) => {
   }
 })
 
+router.post('/articles', requireAuth, async (req, res) => {
+  try {
+    const userId = req.auth.sub
+    const title = String(req.body.title || '').trim()
+    const excerpt = String(req.body.excerpt || '').trim()
+    const content = String(req.body.content || '').trim()
+    const category = String(req.body.category || '').trim().toLowerCase()
+    const tags = normalizeArticleTags(req.body.tags)
+
+    if (!title || !content || !category) {
+      return res.status(400).json({ message: 'title, content, and category are required' })
+    }
+    if (!ARTICLE_CATEGORIES.has(category)) {
+      return res.status(400).json({ message: 'Invalid category' })
+    }
+    if (title.length > 220) {
+      return res.status(400).json({ message: 'Title must be 220 characters or less' })
+    }
+    if (tags == null) {
+      return res.status(400).json({ message: 'tags must be an array of short strings' })
+    }
+
+    const expertCheck = await pool.query(
+      `
+        SELECT is_expert
+        FROM users
+        WHERE id = $1
+        LIMIT 1
+      `,
+      [userId]
+    )
+    if (expertCheck.rowCount === 0 || !expertCheck.rows[0].is_expert) {
+      return res.status(403).json({ message: 'Only verified experts can submit articles' })
+    }
+
+    const id = randomUUID()
+    const readTimeMinutes = estimateReadTimeMinutes(content)
+    const articleExcerpt = excerpt || content.slice(0, 220)
+    const inserted = await pool.query(
+      `
+        INSERT INTO expert_articles (
+          id, user_id, title, excerpt, content, category, tags, read_time_minutes, status
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending')
+        RETURNING
+          id, title, excerpt, content, category, tags, read_time_minutes, status,
+          reviewed_note, reviewed_at, published_at, created_at
+      `,
+      [id, userId, title, articleExcerpt, content, category, tags, readTimeMinutes]
+    )
+
+    return res.status(201).json({ article: toMyArticle(inserted.rows[0]) })
+  } catch (error) {
+    return res.status(500).json({ message: 'Failed to submit article', error: error.message })
+  }
+})
+
+router.get('/articles/me', requireAuth, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `
+        SELECT
+          id, title, excerpt, content, category, tags, read_time_minutes, status,
+          reviewed_note, reviewed_at, published_at, created_at
+        FROM expert_articles
+        WHERE user_id = $1
+        ORDER BY created_at DESC
+      `,
+      [req.auth.sub]
+    )
+
+    return res.status(200).json({ articles: result.rows.map(toMyArticle) })
+  } catch (error) {
+    return res.status(500).json({ message: 'Failed to load your submitted articles', error: error.message })
+  }
+})
+
 router.get('/questions', async (_req, res) => {
   try {
     const questionsResult = await pool.query(
@@ -311,14 +430,19 @@ router.get('/questions', async (_req, res) => {
           q.question,
           q.topic,
           q.is_anonymous,
+          q.target_expert_user_id,
           q.created_at,
           u.name AS author_name,
           u.avatar_url AS author_avatar,
+          te.name AS target_expert_name,
           COUNT(a.id)::int AS answer_count
         FROM expert_questions q
         JOIN users u ON u.id = q.user_id
+        LEFT JOIN users te ON te.id = q.target_expert_user_id
         LEFT JOIN expert_answers a ON a.question_id = q.id
-        GROUP BY q.id, q.user_id, q.question, q.topic, q.is_anonymous, q.created_at, u.name, u.avatar_url
+        GROUP BY
+          q.id, q.user_id, q.question, q.topic, q.is_anonymous,
+          q.target_expert_user_id, q.created_at, u.name, u.avatar_url, te.name
         ORDER BY q.created_at DESC
       `
     )
@@ -353,6 +477,8 @@ router.post('/questions', requireAuth, async (req, res) => {
     const question = String(req.body.question || '').trim()
     const topic = String(req.body.topic || '').trim()
     const isAnonymous = Boolean(req.body.isAnonymous)
+    const targetExpertIdRaw = String(req.body.targetExpertId || '').trim()
+    const targetExpertId = targetExpertIdRaw || null
 
     if (!question) {
       return res.status(400).json({ message: 'Question is required' })
@@ -362,14 +488,33 @@ router.post('/questions', requireAuth, async (req, res) => {
       return res.status(400).json({ message: 'Invalid question topic' })
     }
 
+    let targetExpertName = null
+    if (targetExpertId) {
+      const targetExpertResult = await pool.query(
+        `
+          SELECT id, name, is_expert
+          FROM users
+          WHERE id = $1
+          LIMIT 1
+        `,
+        [targetExpertId]
+      )
+
+      if (targetExpertResult.rowCount === 0 || !targetExpertResult.rows[0].is_expert) {
+        return res.status(400).json({ message: 'Selected target expert is invalid or not verified' })
+      }
+
+      targetExpertName = targetExpertResult.rows[0].name
+    }
+
     const questionId = randomUUID()
     const inserted = await pool.query(
       `
-        INSERT INTO expert_questions (id, user_id, question, topic, is_anonymous)
-        VALUES ($1, $2, $3, $4, $5)
-        RETURNING id, user_id, question, topic, is_anonymous, created_at
+        INSERT INTO expert_questions (id, user_id, question, topic, is_anonymous, target_expert_user_id)
+        VALUES ($1, $2, $3, $4, $5, $6)
+        RETURNING id, user_id, question, topic, is_anonymous, target_expert_user_id, created_at
       `,
-      [questionId, userId, question, topic, isAnonymous]
+      [questionId, userId, question, topic, isAnonymous, targetExpertId]
     )
 
     const userResult = await pool.query('SELECT name, avatar_url FROM users WHERE id = $1 LIMIT 1', [userId])
@@ -381,6 +526,7 @@ router.post('/questions', requireAuth, async (req, res) => {
         author_name: user.name,
         author_avatar: user.avatar_url,
         answer_count: 0,
+        target_expert_name: targetExpertName,
       }),
     })
   } catch (error) {
@@ -417,9 +563,22 @@ router.post('/questions/:questionId/answers', requireAuth, async (req, res) => {
       return res.status(403).json({ message: 'Only approved experts can answer questions' })
     }
 
-    const questionExists = await pool.query('SELECT id FROM expert_questions WHERE id = $1 LIMIT 1', [questionId])
+    const questionExists = await pool.query(
+      `
+        SELECT id, target_expert_user_id
+        FROM expert_questions
+        WHERE id = $1
+        LIMIT 1
+      `,
+      [questionId]
+    )
     if (questionExists.rowCount === 0) {
       return res.status(404).json({ message: 'Question not found' })
+    }
+
+    const questionRow = questionExists.rows[0]
+    if (questionRow.target_expert_user_id && questionRow.target_expert_user_id !== userId) {
+      return res.status(403).json({ message: 'This question is reserved for another expert' })
     }
 
     const answerId = randomUUID()

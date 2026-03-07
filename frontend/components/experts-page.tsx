@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, type ChangeEvent } from 'react';
+import { useEffect, useMemo, useState, type ChangeEvent } from 'react';
 import {
   createExpertApplication,
   createExpertQuestion,
@@ -44,7 +44,9 @@ import {
   ChevronLeft,
   CheckCircle2,
   MessageSquare,
+  Mic,
   User,
+  Video,
   X,
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
@@ -75,6 +77,15 @@ const C2 = '#CB978E';
 const C3 = '#D4B9B2';
 const MAX_EVIDENCE_FILES = 3;
 const MAX_EVIDENCE_FILE_SIZE_BYTES = 2 * 1024 * 1024;
+
+function normalizeConsultationMode(mode: unknown): 'chat' | 'voice' | 'video' | null {
+  const raw = String(mode || '').trim().toLowerCase();
+  const value = raw.replace(/[_\s-]+/g, '');
+  if (value === 'audio' || value === 'voice' || value === 'voicecall') return 'voice';
+  if (value === 'chat' || value === 'text' || value === 'chatroom') return 'chat';
+  if (value === 'video' || value === 'videocall') return 'video';
+  return null;
+}
 
 function readFileAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -118,9 +129,16 @@ function QuestionDetail({ questionId, onBack }: { questionId: string; onBack: ()
               </p>
             </div>
           </div>
-          <Badge variant="outline" className={`shrink-0 text-xs ${TOPIC_COLORS[question.topic]}`}>
-            {TOPIC_LABELS[question.topic]}
-          </Badge>
+          <div className="flex items-center gap-1.5">
+            {question.targetExpertName && (
+              <Badge variant="outline" className="shrink-0 border-[#d4b9b2] bg-white text-[10px] text-[#cb978e]">
+                For {question.targetExpertName}
+              </Badge>
+            )}
+            <Badge variant="outline" className={`shrink-0 text-xs ${TOPIC_COLORS[question.topic]}`}>
+              {TOPIC_LABELS[question.topic]}
+            </Badge>
+          </div>
         </div>
 
         <p className="text-sm leading-relaxed text-foreground">{question.question}</p>
@@ -180,14 +198,17 @@ function QuestionDetail({ questionId, onBack }: { questionId: string; onBack: ()
 function AskQuestionDialog({
   open,
   onOpenChange,
+  verifiedExperts,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
+  verifiedExperts: VerifiedExpert[];
 }) {
   const { setQuestions } = useAppStore();
   const [questionText, setQuestionText] = useState('');
   const [topic, setTopic] = useState<ExpertTopic>('medical');
   const [isAnonymous, setIsAnonymous] = useState(false);
+  const [targetExpertId, setTargetExpertId] = useState<string>('any');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
@@ -202,6 +223,7 @@ function AskQuestionDialog({
         question: questionText.trim(),
         topic,
         isAnonymous,
+        targetExpertId: targetExpertId === 'any' ? null : targetExpertId,
       });
 
       const latestQuestions = useAppStore.getState().questions;
@@ -210,6 +232,7 @@ function AskQuestionDialog({
       setQuestionText('');
       setTopic('medical');
       setIsAnonymous(false);
+      setTargetExpertId('any');
       onOpenChange(false);
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : 'Failed to submit question');
@@ -238,6 +261,24 @@ function AskQuestionDialog({
           <p className="-mt-2 text-right text-xs text-muted-foreground">{questionText.length}/1000</p>
 
           <div className="flex flex-col gap-3 rounded-lg bg-muted/40 p-4">
+            <div className="flex items-center justify-between">
+              <Label htmlFor="target-expert-select" className="text-sm font-medium">Send to</Label>
+              <Select value={targetExpertId} onValueChange={setTargetExpertId}>
+                <SelectTrigger id="target-expert-select" className="h-8 w-56 text-sm">
+                  <SelectValue placeholder="Any verified expert" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="any">Any verified expert</SelectItem>
+                  {verifiedExperts.map((expert) => (
+                    <SelectItem key={expert.id} value={expert.id}>
+                      {expert.name}
+                      {expert.specialty ? ` — ${expert.specialty}` : ''}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <Separator />
             <div className="flex items-center justify-between">
               <Label htmlFor="topic-select" className="text-sm font-medium">Topic</Label>
               <Select value={topic} onValueChange={(v) => setTopic(v as ExpertTopic)}>
@@ -438,6 +479,8 @@ export function ExpertsPage() {
     setExpertSearch,
     getFilteredQuestions,
     setAuthenticatedUser,
+    setActiveConsultation,
+    setView,
   } = useAppStore();
   const [askOpen, setAskOpen] = useState(false);
   const [applyOpen, setApplyOpen] = useState(false);
@@ -454,6 +497,9 @@ export function ExpertsPage() {
   const [paymentBusyKey, setPaymentBusyKey] = useState('');
   const [paymentError, setPaymentError] = useState('');
   const [premiumBusy, setPremiumBusy] = useState(false);
+  const [paymentProvider, setPaymentProvider] = useState<'mpesa' | 'chapa'>('mpesa');
+  const [expertDirectorySearch, setExpertDirectorySearch] = useState('');
+  const [expertSort, setExpertSort] = useState<'recommended' | 'lowest' | 'highest'>('recommended');
 
   const filteredQuestions = getFilteredQuestions();
   const premiumActive = Boolean(
@@ -461,6 +507,31 @@ export function ExpertsPage() {
       currentUser.premiumUntil &&
       currentUser.premiumUntil.getTime() > Date.now()
   );
+
+  const browsableExperts = useMemo(() => {
+    const q = expertDirectorySearch.trim().toLowerCase();
+    let next = verifiedExperts.filter((expert) => {
+      if (!q) return true;
+      const haystack = `${expert.name} ${expert.specialty}`.toLowerCase();
+      return haystack.includes(q);
+    });
+
+    const minimumPrice = (expert: VerifiedExpert) => {
+      const values = [expert.pricing.chat, expert.pricing.voice, expert.pricing.video].filter(
+        (value): value is number => typeof value === 'number'
+      );
+      if (values.length === 0) return Number.POSITIVE_INFINITY;
+      return Math.min(...values);
+    };
+
+    if (expertSort === 'lowest') {
+      next = [...next].sort((a, b) => minimumPrice(a) - minimumPrice(b));
+    } else if (expertSort === 'highest') {
+      next = [...next].sort((a, b) => minimumPrice(b) - minimumPrice(a));
+    }
+
+    return next;
+  }, [expertDirectorySearch, expertSort, verifiedExperts]);
 
   useEffect(() => {
     let active = true;
@@ -544,7 +615,52 @@ export function ExpertsPage() {
     return input.trim();
   };
 
-  const pollPaymentStatus = async (txRef: string) => {
+  const persistConsultationContext = (payload: {
+    txRef: string;
+    expertId: string;
+    expertName: string;
+    mode: 'chat' | 'voice' | 'video';
+  }) => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem(`consultation:${payload.txRef}`, JSON.stringify(payload));
+    window.localStorage.setItem('pendingConsultationTxRef', payload.txRef);
+  };
+
+  const consumeConsultationContext = (txRef: string) => {
+    if (typeof window === 'undefined') return null;
+    const raw = window.localStorage.getItem(`consultation:${txRef}`);
+    if (!raw) return null;
+    window.localStorage.removeItem(`consultation:${txRef}`);
+    const pendingTxRef = window.localStorage.getItem('pendingConsultationTxRef');
+    if (pendingTxRef === txRef) {
+      window.localStorage.removeItem('pendingConsultationTxRef');
+    }
+    try {
+      const parsed = JSON.parse(raw) as {
+        txRef?: string;
+        expertId?: string;
+        expertName?: string;
+        mode?: string;
+      };
+      const normalizedMode = normalizeConsultationMode(parsed.mode);
+      if (!parsed.txRef || !parsed.expertId || !parsed.expertName || !normalizedMode) {
+        return null;
+      }
+      return {
+        txRef: parsed.txRef,
+        expertId: parsed.expertId,
+        expertName: parsed.expertName,
+        mode: normalizedMode,
+      };
+    } catch (_error) {
+      return null;
+    }
+  };
+
+  const pollPaymentStatus = async (
+    txRef: string,
+    fallbackContext?: { expertId: string; expertName: string; mode: 'chat' | 'voice' | 'video' }
+  ) => {
     for (let attempt = 0; attempt < 10; attempt += 1) {
       await new Promise((resolve) => setTimeout(resolve, 4000));
       try {
@@ -552,7 +668,33 @@ export function ExpertsPage() {
         if (verification.status === 'success') {
           const user = await refreshSession();
           setAuthenticatedUser(user);
-          setPaymentError('Payment successful. Premium/consultation access updated.');
+          if (verification.kind === 'expert_consultation') {
+            const normalizedMode = normalizeConsultationMode(verification.serviceType);
+            const stored = consumeConsultationContext(txRef);
+            const fallbackFromVerification =
+              normalizedMode
+                ? {
+                    txRef,
+                    expertId: verification.expertUserId || 'expert',
+                    expertName: verification.expertName || 'Verified Expert',
+                    mode: normalizedMode,
+                  }
+                : null;
+            const context =
+              stored ||
+              (fallbackContext ? { txRef, ...fallbackContext } : null) ||
+              fallbackFromVerification;
+            if (context) {
+              setActiveConsultation({
+                ...context,
+                startedAt: new Date(),
+              });
+              setView('consultation');
+              setPaymentError('');
+              return;
+            }
+          }
+          setPaymentError('Payment successful. Access updated.');
           return;
         }
       } catch (_error) {
@@ -563,23 +705,28 @@ export function ExpertsPage() {
 
   const startExpertCommunicationPayment = async (
     expertId: string,
+    expertName: string,
     mode: 'chat' | 'voice' | 'video'
   ) => {
     const key = `${expertId}-${mode}`;
-    const phoneNumber = askPhoneNumber();
-    if (!phoneNumber) {
-      return;
-    }
+    const phoneNumber = paymentProvider === 'mpesa' ? askPhoneNumber() : '';
+    if (paymentProvider === 'mpesa' && !phoneNumber) return;
     setPaymentBusyKey(key);
     setPaymentError('');
     try {
-      const payment = await initializeExpertCommunicationPayment({ expertId, mode, phoneNumber });
+      const payment = await initializeExpertCommunicationPayment({
+        expertId,
+        mode,
+        paymentProvider,
+        phoneNumber: paymentProvider === 'mpesa' ? phoneNumber : undefined,
+      });
+      persistConsultationContext({ txRef: payment.txRef, expertId, expertName, mode });
       if (payment.checkoutUrl) {
         window.location.assign(payment.checkoutUrl);
         return;
       }
       setPaymentError(payment.customerMessage || 'M-Pesa prompt sent. Complete PIN on your phone.');
-      void pollPaymentStatus(payment.txRef);
+      void pollPaymentStatus(payment.txRef, { expertId, expertName, mode });
     } catch (error) {
       setPaymentError(error instanceof Error ? error.message : 'Failed to initialize payment');
       setPaymentBusyKey('');
@@ -589,14 +736,15 @@ export function ExpertsPage() {
   };
 
   const startPremiumPayment = async () => {
-    const phoneNumber = askPhoneNumber();
-    if (!phoneNumber) {
-      return;
-    }
+    const phoneNumber = paymentProvider === 'mpesa' ? askPhoneNumber() : '';
+    if (paymentProvider === 'mpesa' && !phoneNumber) return;
     setPremiumBusy(true);
     setPaymentError('');
     try {
-      const payment = await initializePremiumPayment({ phoneNumber });
+      const payment = await initializePremiumPayment({
+        paymentProvider,
+        phoneNumber: paymentProvider === 'mpesa' ? phoneNumber : undefined,
+      });
       if (payment.checkoutUrl) {
         window.location.assign(payment.checkoutUrl);
         return;
@@ -678,72 +826,122 @@ export function ExpertsPage() {
         </div>
       )}
 
-      <div className="mb-6 flex flex-wrap gap-2 rounded-2xl border bg-white p-5 shadow-sm" style={{ borderColor: '#ecddd9' }}>
-        <div className="mb-2 flex w-full items-start justify-between gap-3">
+      <section className="mb-6 rounded-2xl border bg-white p-5 shadow-sm" style={{ borderColor: '#ecddd9' }}>
+        <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
           <div>
-            <p className="text-xs font-medium uppercase tracking-wide" style={{ color: C2 }}>Our verified experts</p>
+            <p className="text-xs font-medium uppercase tracking-wide" style={{ color: C2 }}>Verified experts</p>
+            <p className="mt-1 text-xs text-gray-500">
+              Browse experts and pay per service: chat, audio, or video.
+            </p>
             <p className="mt-1 text-xs text-gray-500">
               {premiumActive
                 ? 'Premium discount is active on expert communication payments.'
                 : 'Upgrade to premium to get a discount on expert communication payments.'}
             </p>
           </div>
-          {!currentUser.isExpert && (
-            <Button size="sm" onClick={() => void startPremiumPayment()} disabled={premiumBusy} style={{ background: C2 }}>
-              {premiumBusy ? 'Processing...' : premiumActive ? 'Extend Premium' : 'Go Premium'}
-            </Button>
-          )}
-        </div>
-        {verifiedExperts.length === 0 && (
-          <p className="text-xs text-gray-500">No verified experts listed yet.</p>
-        )}
-        {verifiedExperts.map((expert) => (
-          <div key={expert.id} className="w-full rounded-xl border p-3 text-xs" style={{ borderColor: '#ecddd9', background: '#fffafb' }}>
-            <div className="flex items-center gap-1.5 text-foreground">
-              <CheckCircle2 className="h-3 w-3 shrink-0" style={{ color: C2 }} />
-              <span className="font-medium">
-                {expert.name}
-                {expert.specialty ? ` — ${expert.specialty}` : ''}
-              </span>
-            </div>
-            <div className="mt-2 flex flex-wrap gap-2">
-              <Button
-                size="sm"
-                variant="outline"
-                className="border-[#d4b9b2] text-[#cb978e] hover:bg-white"
-                disabled={expert.id === currentUser.id || expert.pricing.chat == null || paymentBusyKey === `${expert.id}-chat`}
-                onClick={() => void startExpertCommunicationPayment(expert.id, 'chat')}
-              >
-                {paymentBusyKey === `${expert.id}-chat`
-                  ? 'Processing...'
-                  : `Chat $${expert.pricing.chat ?? 'N/A'}`}
+          <div className="flex flex-wrap items-center gap-2">
+            <Select value={paymentProvider} onValueChange={(value) => setPaymentProvider(value as 'mpesa' | 'chapa')}>
+              <SelectTrigger className="h-9 w-[150px] border-[#d4b9b2] text-xs">
+                <SelectValue placeholder="Payment method" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="mpesa">M-Pesa</SelectItem>
+                <SelectItem value="chapa">Chapa</SelectItem>
+              </SelectContent>
+            </Select>
+            {!currentUser.isExpert && (
+              <Button size="sm" onClick={() => void startPremiumPayment()} disabled={premiumBusy} style={{ background: C2 }}>
+                {premiumBusy ? 'Processing...' : premiumActive ? 'Extend Premium' : 'Go Premium'}
               </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                className="border-[#d4b9b2] text-[#cb978e] hover:bg-white"
-                disabled={expert.id === currentUser.id || expert.pricing.voice == null || paymentBusyKey === `${expert.id}-voice`}
-                onClick={() => void startExpertCommunicationPayment(expert.id, 'voice')}
-              >
-                {paymentBusyKey === `${expert.id}-voice`
-                  ? 'Processing...'
-                  : `Voice $${expert.pricing.voice ?? 'N/A'}`}
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                className="border-[#d4b9b2] text-[#cb978e] hover:bg-white"
-                disabled={expert.id === currentUser.id || expert.pricing.video == null || paymentBusyKey === `${expert.id}-video`}
-                onClick={() => void startExpertCommunicationPayment(expert.id, 'video')}
-              >
-                {paymentBusyKey === `${expert.id}-video`
-                  ? 'Processing...'
-                  : `Video $${expert.pricing.video ?? 'N/A'}`}
-              </Button>
-            </div>
+            )}
           </div>
-        ))}
-      </div>
+        </div>
+
+        <div className="mb-4 grid gap-2 sm:grid-cols-[1fr_220px]">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Search expert by name or specialty..."
+              value={expertDirectorySearch}
+              onChange={(e) => setExpertDirectorySearch(e.target.value)}
+              className="h-10 rounded-xl border-[#ecddd9] bg-white pl-9 text-sm"
+            />
+          </div>
+          <Select value={expertSort} onValueChange={(value) => setExpertSort(value as typeof expertSort)}>
+            <SelectTrigger className="h-10 rounded-xl border-[#ecddd9] text-sm">
+              <SelectValue placeholder="Sort experts" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="recommended">Recommended</SelectItem>
+              <SelectItem value="lowest">Price: Low to High</SelectItem>
+              <SelectItem value="highest">Price: High to Low</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        {browsableExperts.length === 0 && (
+          <p className="rounded-xl border border-dashed border-[#ecddd9] bg-[#fffafb] p-6 text-center text-xs text-gray-500">
+            No verified experts found for your filter.
+          </p>
+        )}
+
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+          {browsableExperts.map((expert) => (
+            <article
+              key={expert.id}
+              className="rounded-xl border p-4 text-xs shadow-sm"
+              style={{ borderColor: '#ecddd9', background: '#fffafb' }}
+            >
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <div className="flex min-w-0 items-center gap-2 text-foreground">
+                  <CheckCircle2 className="h-3.5 w-3.5 shrink-0" style={{ color: C2 }} />
+                  <p className="truncate text-sm font-semibold">
+                    {expert.name}
+                  </p>
+                </div>
+                <Badge variant="outline" className="border-[#d4b9b2] bg-white text-[#cb978e]">
+                  Verified
+                </Badge>
+              </div>
+              <p className="mb-3 line-clamp-1 text-xs text-gray-600">
+                {expert.specialty || 'General maternal support'}
+              </p>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="justify-start gap-1.5 border-[#d4b9b2] text-[#cb978e] hover:bg-white"
+                  disabled={expert.id === currentUser.id || expert.pricing.chat == null || paymentBusyKey === `${expert.id}-chat`}
+                  onClick={() => void startExpertCommunicationPayment(expert.id, expert.name, 'chat')}
+                >
+                  <MessageSquare className="h-3.5 w-3.5" />
+                  {paymentBusyKey === `${expert.id}-chat` ? 'Processing...' : `Chat $${expert.pricing.chat ?? 'N/A'}`}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="justify-start gap-1.5 border-[#d4b9b2] text-[#cb978e] hover:bg-white"
+                  disabled={expert.id === currentUser.id || expert.pricing.voice == null || paymentBusyKey === `${expert.id}-voice`}
+                  onClick={() => void startExpertCommunicationPayment(expert.id, expert.name, 'voice')}
+                >
+                  <Mic className="h-3.5 w-3.5" />
+                  {paymentBusyKey === `${expert.id}-voice` ? 'Processing...' : `Audio $${expert.pricing.voice ?? 'N/A'}`}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="justify-start gap-1.5 border-[#d4b9b2] text-[#cb978e] hover:bg-white"
+                  disabled={expert.id === currentUser.id || expert.pricing.video == null || paymentBusyKey === `${expert.id}-video`}
+                  onClick={() => void startExpertCommunicationPayment(expert.id, expert.name, 'video')}
+                >
+                  <Video className="h-3.5 w-3.5" />
+                  {paymentBusyKey === `${expert.id}-video` ? 'Processing...' : `Video $${expert.pricing.video ?? 'N/A'}`}
+                </Button>
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
       {paymentError && <p className="-mt-3 mb-5 text-xs text-destructive">{paymentError}</p>}
 
       {currentUser.isExpert && (
@@ -752,7 +950,7 @@ export function ExpertsPage() {
           <p className="mt-1 text-xs text-muted-foreground">Set your own price after admin approval.</p>
           <div className="mt-3 grid gap-2 sm:grid-cols-3">
             <Input type="number" min="0" step="0.01" placeholder="Chat $" value={priceChat} onChange={(e) => setPriceChat(e.target.value)} />
-            <Input type="number" min="0" step="0.01" placeholder="Voice $" value={priceVoice} onChange={(e) => setPriceVoice(e.target.value)} />
+            <Input type="number" min="0" step="0.01" placeholder="Audio $" value={priceVoice} onChange={(e) => setPriceVoice(e.target.value)} />
             <Input type="number" min="0" step="0.01" placeholder="Video $" value={priceVideo} onChange={(e) => setPriceVideo(e.target.value)} />
           </div>
           <div className="mt-3 flex items-center gap-2">
@@ -761,7 +959,7 @@ export function ExpertsPage() {
             </Button>
             {myPricing && (
               <span className="text-xs text-muted-foreground">
-                Current: chat ${myPricing.chat ?? 0} / voice ${myPricing.voice ?? 0} / video ${myPricing.video ?? 0}
+                Current: chat ${myPricing.chat ?? 0} / audio ${myPricing.voice ?? 0} / video ${myPricing.video ?? 0}
               </span>
             )}
           </div>
@@ -842,9 +1040,16 @@ export function ExpertsPage() {
                     <p className="text-xs text-muted-foreground">{formatDistanceToNow(q.timestamp, { addSuffix: true })}</p>
                   </div>
                 </div>
-                <Badge variant="outline" className={`shrink-0 text-xs ${TOPIC_COLORS[q.topic]}`}>
-                  {TOPIC_LABELS[q.topic]}
-                </Badge>
+                <div className="flex items-center gap-1.5">
+                  {q.targetExpertName && (
+                    <Badge variant="outline" className="shrink-0 border-[#d4b9b2] bg-white text-[10px] text-[#cb978e]">
+                      For {q.targetExpertName}
+                    </Badge>
+                  )}
+                  <Badge variant="outline" className={`shrink-0 text-xs ${TOPIC_COLORS[q.topic]}`}>
+                    {TOPIC_LABELS[q.topic]}
+                  </Badge>
+                </div>
               </div>
 
               <p className="line-clamp-2 text-sm leading-relaxed text-foreground/90">{q.question}</p>
@@ -867,7 +1072,7 @@ export function ExpertsPage() {
         )}
       </div>
 
-      <AskQuestionDialog open={askOpen} onOpenChange={setAskOpen} />
+      <AskQuestionDialog open={askOpen} onOpenChange={setAskOpen} verifiedExperts={verifiedExperts} />
       <ApplyExpertDialog
         open={applyOpen}
         onOpenChange={setApplyOpen}

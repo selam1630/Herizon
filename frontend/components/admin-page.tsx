@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import {
+  fetchAdminPendingArticles,
   fetchAdminExpertApplications,
   deleteAdminCommunityPost,
   deleteAdminExpertQuestion,
@@ -13,6 +14,8 @@ import {
   type AdminCommunityPost,
   type AdminExpertQuestion,
   type AdminUser,
+  type AdminPendingArticle,
+  reviewAdminArticle,
   updateUserRoles,
 } from '@/lib/api';
 import { useAppStore } from '@/lib/store';
@@ -28,6 +31,7 @@ export function AdminPage() {
   const [tab, setTab] = useState<AdminTab>('experts');
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [applications, setApplications] = useState<AdminExpertApplication[]>([]);
+  const [pendingArticles, setPendingArticles] = useState<AdminPendingArticle[]>([]);
   const [posts, setPosts] = useState<AdminCommunityPost[]>([]);
   const [questions, setQuestions] = useState<AdminExpertQuestion[]>([]);
   const [loading, setLoading] = useState(true);
@@ -41,15 +45,17 @@ export function AdminPage() {
       setLoading(true);
       setError('');
       try {
-        const [loadedUsers, loadedApplications, loadedPosts, loadedQuestions] = await Promise.all([
+        const [loadedUsers, loadedApplications, loadedPendingArticles, loadedPosts, loadedQuestions] = await Promise.all([
           fetchAdminUsers(false),
           fetchAdminExpertApplications(),
+          fetchAdminPendingArticles(),
           fetchAdminCommunityPosts(),
           fetchAdminExpertQuestions(),
         ]);
         if (!active) return;
         setUsers(loadedUsers);
         setApplications(loadedApplications);
+        setPendingArticles(loadedPendingArticles);
         setPosts(loadedPosts);
         setQuestions(loadedQuestions);
       } catch (loadError) {
@@ -85,6 +91,20 @@ export function AdminPage() {
       );
     } catch (reviewError) {
       setError(reviewError instanceof Error ? reviewError.message : 'Failed to review application');
+    } finally {
+      setBusyKey('');
+    }
+  }
+
+  async function reviewArticle(article: AdminPendingArticle, decision: 'approved' | 'rejected') {
+    const key = `article-${article.id}-${decision}`;
+    setBusyKey(key);
+    setError('');
+    try {
+      await reviewAdminArticle(article.id, { decision });
+      setPendingArticles((prev) => prev.filter((item) => item.id !== article.id));
+    } catch (reviewError) {
+      setError(reviewError instanceof Error ? reviewError.message : 'Failed to review article');
     } finally {
       setBusyKey('');
     }
@@ -194,73 +214,120 @@ export function AdminPage() {
       )}
 
       {tab === 'experts' && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Expert Applications</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {pendingApplications.length === 0 && (
-              <p className="text-sm text-muted-foreground">No pending applications right now.</p>
-            )}
-            {pendingApplications.map((application) => (
-              <div key={application.id} className="rounded-md border border-border p-3">
-                <p className="text-sm font-medium text-foreground">{application.userName}</p>
-                <p className="text-xs text-muted-foreground">{application.userEmail}</p>
-                <p className="mt-2 text-xs text-foreground">
-                  <span className="font-medium">Specialty:</span> {application.specialty}
-                </p>
-                <p className="mt-1 text-xs text-foreground">
-                  <span className="font-medium">Credentials:</span> {application.credentials}
-                </p>
-                {application.motivation && (
-                  <p className="mt-1 text-xs text-foreground">
-                    <span className="font-medium">Motivation:</span> {application.motivation}
+        <div className="grid gap-4 lg:grid-cols-2">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Expert Applications</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {pendingApplications.length === 0 && (
+                <p className="text-sm text-muted-foreground">No pending applications right now.</p>
+              )}
+              {pendingApplications.map((application) => (
+                <div key={application.id} className="rounded-md border border-border p-3">
+                  <p className="text-sm font-medium text-foreground">{application.userName}</p>
+                  <p className="text-xs text-muted-foreground">{application.userEmail}</p>
+                  <p className="mt-2 text-xs text-foreground">
+                    <span className="font-medium">Specialty:</span> {application.specialty}
                   </p>
-                )}
-                {application.evidencePhotos.length > 0 && (
-                  <div className="mt-2">
-                    <p className="mb-1 text-xs font-medium text-foreground">Evidence Photos:</p>
-                    <div className="grid grid-cols-3 gap-2">
-                      {application.evidencePhotos.map((photo, index) => (
-                        <a
-                          key={`${application.id}-photo-${index}`}
-                          href={photo}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="block overflow-hidden rounded border border-border"
-                        >
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img
-                            src={photo}
-                            alt={`Evidence ${index + 1}`}
-                            className="h-20 w-full object-cover"
-                          />
-                        </a>
-                      ))}
+                  <p className="mt-1 text-xs text-foreground">
+                    <span className="font-medium">Credentials:</span> {application.credentials}
+                  </p>
+                  {application.motivation && (
+                    <p className="mt-1 text-xs text-foreground">
+                      <span className="font-medium">Motivation:</span> {application.motivation}
+                    </p>
+                  )}
+                  {application.evidencePhotos.length > 0 && (
+                    <div className="mt-2">
+                      <p className="mb-1 text-xs font-medium text-foreground">Evidence Photos:</p>
+                      <div className="grid grid-cols-3 gap-2">
+                        {application.evidencePhotos.map((photo, index) => (
+                          <a
+                            key={`${application.id}-photo-${index}`}
+                            href={photo}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="block overflow-hidden rounded border border-border"
+                          >
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={photo}
+                              alt={`Evidence ${index + 1}`}
+                              className="h-20 w-full object-cover"
+                            />
+                          </a>
+                        ))}
+                      </div>
                     </div>
+                  )}
+                  <div className="mt-3 flex gap-2">
+                    <Button
+                      size="sm"
+                      onClick={() => void reviewApplication(application, 'approved')}
+                      disabled={busyKey === `application-${application.id}-approved`}
+                    >
+                      {busyKey === `application-${application.id}-approved` ? 'Approving...' : 'Approve'}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => void reviewApplication(application, 'rejected')}
+                      disabled={busyKey === `application-${application.id}-rejected`}
+                    >
+                      {busyKey === `application-${application.id}-rejected` ? 'Rejecting...' : 'Reject'}
+                    </Button>
                   </div>
-                )}
-                <div className="mt-3 flex gap-2">
-                  <Button
-                    size="sm"
-                    onClick={() => void reviewApplication(application, 'approved')}
-                    disabled={busyKey === `application-${application.id}-approved`}
-                  >
-                    {busyKey === `application-${application.id}-approved` ? 'Approving...' : 'Approve'}
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => void reviewApplication(application, 'rejected')}
-                    disabled={busyKey === `application-${application.id}-rejected`}
-                  >
-                    {busyKey === `application-${application.id}-rejected` ? 'Rejecting...' : 'Reject'}
-                  </Button>
                 </div>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
+              ))}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Pending Expert Articles</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {pendingArticles.length === 0 && (
+                <p className="text-sm text-muted-foreground">No pending articles right now.</p>
+              )}
+              {pendingArticles.map((article) => (
+                <div key={article.id} className="rounded-md border border-border p-3">
+                  <p className="text-sm font-medium text-foreground">{article.title}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {article.authorName} ({article.authorEmail})
+                  </p>
+                  <p className="mt-2 line-clamp-3 text-xs text-foreground">{article.excerpt}</p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <Badge variant="outline">{article.category}</Badge>
+                    {article.tags.slice(0, 3).map((tag) => (
+                      <Badge key={`${article.id}-${tag}`} variant="secondary">
+                        {tag}
+                      </Badge>
+                    ))}
+                  </div>
+                  <div className="mt-3 flex gap-2">
+                    <Button
+                      size="sm"
+                      onClick={() => void reviewArticle(article, 'approved')}
+                      disabled={busyKey === `article-${article.id}-approved`}
+                    >
+                      {busyKey === `article-${article.id}-approved` ? 'Approving...' : 'Approve'}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => void reviewArticle(article, 'rejected')}
+                      disabled={busyKey === `article-${article.id}-rejected`}
+                    >
+                      {busyKey === `article-${article.id}-rejected` ? 'Rejecting...' : 'Reject'}
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        </div>
       )}
 
       {tab === 'users' && (

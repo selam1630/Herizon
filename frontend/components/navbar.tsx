@@ -43,15 +43,14 @@ export function Navbar() {
   };
 
   return (
-    <header className="sticky top-0 z-50 w-full px-4 pt-4 pb-1 sm:px-8 sm:pt-5">
-      <div
-        className="mx-auto flex h-14 max-w-6xl items-center justify-between rounded-2xl px-4 sm:px-6 backdrop-blur-md shadow-sm"
-        style={{
-          background: 'rgba(253, 246, 244, 0.95)',
-          border: `1px solid #ecddd9`,
-          boxShadow: '0 4px 24px rgba(203,151,142,0.10)',
-        }}
-      >
+    <header
+      className="sticky top-0 z-50 w-full border-b backdrop-blur-xl"
+      style={{
+        borderColor: '#ecddd9',
+        background: 'linear-gradient(180deg, rgba(253, 246, 244, 0.98) 0%, rgba(253, 246, 244, 0.94) 100%)',
+      }}
+    >
+      <div className="mx-auto flex h-16 w-full max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
 
         {/* ── Logo ─────────────────────────────────────────────────────── */}
         <button
