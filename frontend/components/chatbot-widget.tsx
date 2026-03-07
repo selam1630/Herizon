@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { useAppStore } from '@/lib/store';
 import { cn } from '@/lib/utils';
-import { CheckCircle2, Heart, Minimize2, Send, Sparkles, X } from 'lucide-react';
+import { CheckCircle2, Heart, Minimize2, Send, Sparkles, ThumbsDown, ThumbsUp, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 
 const QUICK_PROMPTS = [
@@ -21,6 +21,7 @@ export function ChatbotWidget() {
   const { chatOpen, chatMessages, chatLoading, setChatOpen, sendChatMessage, isAuthenticated } = useAppStore();
   const [inputValue, setInputValue] = useState('');
   const [minimized, setMinimized] = useState(false);
+  const [feedbackGiven, setFeedbackGiven] = useState<Record<string, boolean>>({});
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -46,6 +47,10 @@ export function ChatbotWidget() {
   const handleQuickPrompt = (prompt: string) => {
     if (!isAuthenticated) return;
     sendChatMessage(prompt);
+  };
+
+  const handleFeedback = (messageId: string) => {
+    setFeedbackGiven((prev) => ({ ...prev, [messageId]: true }));
   };
 
   if (!chatOpen) {
@@ -147,6 +152,61 @@ export function ChatbotWidget() {
                       message.content
                     )}
                   </div>
+
+                  {message.isAi && message.id !== 'msg-welcome' && (
+                    <div className="flex items-center gap-3 px-2">
+                      {typeof (message as { confidence?: unknown }).confidence === 'number' && (
+                        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                          <div className="flex gap-0.5">
+                            {[...Array(3)].map((_, i) => (
+                              <div
+                                key={i}
+                                className={cn(
+                                  'h-1.5 w-1.5 rounded-full',
+                                  i < Math.floor((((message as { confidence?: number }).confidence || 0) / 33))
+                                    ? 'bg-green-500'
+                                    : 'bg-gray-300 dark:bg-gray-700'
+                                )}
+                              />
+                            ))}
+                          </div>
+                          <span className="font-medium">
+                            {(message as { confidence?: number }).confidence}%
+                          </span>
+                        </div>
+                      )}
+                      {typeof (message as { sourceCount?: unknown }).sourceCount === 'number' &&
+                        ((message as { sourceCount?: number }).sourceCount || 0) > 0 && (
+                          <div className="text-xs text-muted-foreground font-medium">
+                            📚 {(message as { sourceCount?: number }).sourceCount}{' '}
+                            {((message as { sourceCount?: number }).sourceCount || 0) === 1 ? 'source' : 'sources'}
+                          </div>
+                        )}
+                      {!feedbackGiven[message.id] && (
+                        <div className="flex items-center gap-1 ml-auto">
+                          <button
+                            onClick={() => handleFeedback(message.id)}
+                            className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-green-100 hover:text-green-600 dark:hover:bg-green-950"
+                            aria-label="Helpful"
+                          >
+                            <ThumbsUp className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            onClick={() => handleFeedback(message.id)}
+                            className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-950"
+                            aria-label="Not helpful"
+                          >
+                            <ThumbsDown className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      )}
+                      {feedbackGiven[message.id] && (
+                        <div className="text-xs text-green-600 dark:text-green-400 font-medium ml-auto">
+                          Thanks for your feedback! 💚
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             ))}

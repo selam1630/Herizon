@@ -1,6 +1,50 @@
 const OPENAI_API_KEY = String(process.env.OPENAI_API_KEY || '').trim()
 const OPENAI_MODEL = String(process.env.OPENAI_MODEL || 'gpt-4o-mini').trim()
 const OPENAI_STT_MODEL = String(process.env.OPENAI_STT_MODEL || 'whisper-1').trim()
+const QUERY_STOPWORDS = new Set([
+  'what',
+  'when',
+  'where',
+  'which',
+  'who',
+  'whom',
+  'whose',
+  'why',
+  'how',
+  'can',
+  'could',
+  'should',
+  'would',
+  'please',
+  'tell',
+  'about',
+  'explain',
+  'define',
+  'this',
+  'that',
+  'these',
+  'those',
+  'with',
+  'without',
+  'from',
+  'into',
+  'over',
+  'under',
+  'your',
+  'my',
+  'our',
+  'their',
+  'there',
+  'here',
+  'have',
+  'has',
+  'had',
+  'does',
+  'did',
+  'for',
+  'and',
+  'the',
+])
 
 function tokenize(text) {
   return String(text || '')
@@ -11,8 +55,19 @@ function tokenize(text) {
 }
 
 function scoreByTokenOverlap(text, tokens) {
-  const haystack = String(text || '').toLowerCase()
-  return tokens.reduce((sum, token) => (haystack.includes(token) ? sum + 1 : sum), 0)
+  if (!tokens.length) return { score: 0, matchedCount: 0 }
+
+  const textTokens = new Set(tokenize(text))
+  let matchedCount = 0
+
+  for (const token of tokens) {
+    if (textTokens.has(token)) matchedCount += 1
+  }
+
+  // Prefer both absolute overlap and query coverage.
+  const coverage = matchedCount / tokens.length
+  const score = matchedCount + coverage
+  return { score, matchedCount }
 }
 
 function fallbackResponse(question, contextItems) {
@@ -27,7 +82,13 @@ function fallbackResponse(question, contextItems) {
 async function fetchGroundingContext(pool, question, topic, limit = 6) {
   const topicFilter = String(topic || '').trim().toLowerCase()
   const tokens = tokenize(question)
-  const safeTokens = tokens.slice(0, 8)
+  const queryTokens = tokens
+    .filter((token) => !QUERY_STOPWORDS.has(token))
+    .slice(0, 10)
+
+  if (queryTokens.length === 0) {
+    return []
+  }
 
   const [expertAnswersResult, communityResult] = await Promise.all([
     pool.query(
@@ -60,11 +121,13 @@ async function fetchGroundingContext(pool, question, topic, limit = 6) {
   for (const row of expertAnswersResult.rows) {
     const text = String(row.content || '').trim()
     if (!text) continue
-    const score = scoreByTokenOverlap(text, safeTokens) + 2
+    const overlap = scoreByTokenOverlap(text, queryTokens)
+    const score = overlap.score + 0.35
     candidates.push({
       source: 'expert',
       text,
       score,
+      matchedCount: overlap.matchedCount,
       meta: `Expert: ${row.expert_name || 'Verified expert'}`,
       createdAt: row.created_at ? new Date(row.created_at).getTime() : 0,
     })
@@ -73,18 +136,25 @@ async function fetchGroundingContext(pool, question, topic, limit = 6) {
   for (const row of communityResult.rows) {
     const text = String(row.content || '').trim()
     if (!text) continue
-    const score = scoreByTokenOverlap(text, safeTokens)
+    const overlap = scoreByTokenOverlap(text, queryTokens)
     candidates.push({
       source: row.kind || 'community',
       text,
-      score,
+      score: overlap.score,
+      matchedCount: overlap.matchedCount,
       meta: 'Community',
       createdAt: row.created_at ? new Date(row.created_at).getTime() : 0,
     })
   }
 
   return candidates
-    .filter((item) => item.score > 0)
+    .filter((item) => {
+      if (item.matchedCount >= 2) return true
+      if (item.matchedCount === 1) {
+        return queryTokens.some((token) => token.length >= 7 && item.text.toLowerCase().includes(token))
+      }
+      return false
+    })
     .sort((a, b) => {
       if (b.score !== a.score) return b.score - a.score
       return b.createdAt - a.createdAt
