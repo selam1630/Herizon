@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useAppStore, type PostCategory } from '@/lib/store';
+import { createCommunityComment, createCommunityPost } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -114,21 +115,36 @@ function PostCard({
 // ─── Post Detail ──────────────────────────────────────────────────────────────
 
 function PostDetail({ postId, onBack }: { postId: string; onBack: () => void }) {
-  const { posts, postComments, addComment, toggleLike, currentUser } = useAppStore();
+  const { posts, postComments, setPostComments, setPosts, toggleLike, currentUser } = useAppStore();
   const post = posts.find((p) => p.id === postId);
   const comments = postComments[postId] || [];
   const [commentText, setCommentText] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
 
   if (!post) return null;
 
   const handleSubmitComment = async () => {
     if (!commentText.trim()) return;
+    setError('');
     setSubmitting(true);
-    await new Promise((r) => setTimeout(r, 400));
-    addComment(post.id, commentText.trim());
-    setCommentText('');
-    setSubmitting(false);
+    try {
+      const created = await createCommunityComment(post.id, commentText.trim());
+      setPostComments({
+        ...postComments,
+        [post.id]: [...(postComments[post.id] || []), created.comment],
+      });
+      setPosts(
+        posts.map((item) =>
+          item.id === post.id ? { ...item, commentCount: created.commentCount } : item
+        )
+      );
+      setCommentText('');
+    } catch (submitError) {
+      setError(submitError instanceof Error ? submitError.message : 'Failed to post comment');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -243,6 +259,9 @@ function PostDetail({ postId, onBack }: { postId: string; onBack: () => void }) 
                 {submitting ? 'Posting...' : 'Post'}
               </Button>
             </div>
+            {error && (
+              <p className="text-xs text-destructive">{error}</p>
+            )}
           </div>
         </div>
       </div>
@@ -253,29 +272,34 @@ function PostDetail({ postId, onBack }: { postId: string; onBack: () => void }) 
 // ─── New Post Dialog ──────────────────────────────────────────────────────────
 
 function NewPostDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
-  const { addPost, currentUser } = useAppStore();
+  const { setPosts } = useAppStore();
   const [content, setContent] = useState('');
   const [category, setCategory] = useState<PostCategory>('general');
   const [isAnonymous, setIsAnonymous] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
 
   const handleSubmit = async () => {
     if (!content.trim()) return;
+    setError('');
     setSubmitting(true);
-    await new Promise((r) => setTimeout(r, 400));
-    addPost({
-      authorId: currentUser.id,
-      author: currentUser.name,
-      avatar: currentUser.avatar,
-      category,
-      content: content.trim(),
-      isAnonymous,
-    });
-    setContent('');
-    setCategory('general');
-    setIsAnonymous(false);
-    setSubmitting(false);
-    onOpenChange(false);
+    try {
+      const post = await createCommunityPost({
+        category,
+        content: content.trim(),
+        isAnonymous,
+      });
+      const latestPosts = useAppStore.getState().posts;
+      setPosts([post, ...latestPosts]);
+      setContent('');
+      setCategory('general');
+      setIsAnonymous(false);
+      onOpenChange(false);
+    } catch (submitError) {
+      setError(submitError instanceof Error ? submitError.message : 'Failed to publish post');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -325,6 +349,9 @@ function NewPostDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v
               {submitting ? 'Publishing...' : 'Publish'}
             </Button>
           </div>
+          {error && (
+            <p className="text-xs text-destructive">{error}</p>
+          )}
         </div>
       </DialogContent>
     </Dialog>

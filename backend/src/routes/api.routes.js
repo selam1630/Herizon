@@ -1,6 +1,7 @@
 const express = require('express')
 const { articles } = require('../data/articles')
 const authRoutes = require('./auth.routes')
+const communityRoutes = require('./community.routes')
 
 const router = express.Router()
 
@@ -17,6 +18,9 @@ router.get('/', (_req, res) => {
       'POST /api/v1/auth/refresh',
       'POST /api/v1/auth/signout',
       'GET /api/v1/auth/me',
+      'GET /api/v1/community/posts',
+      'POST /api/v1/community/posts',
+      'POST /api/v1/community/posts/:postId/comments',
     ],
   })
 })
@@ -41,5 +45,6 @@ router.get('/v1/articles', (_req, res) => {
 })
 
 router.use('/v1/auth', authRoutes)
+router.use('/v1/community', communityRoutes)
 
 module.exports = router

@@ -111,6 +111,7 @@ interface AppStore {
   setPostFilter: (filter: PostCategory | 'all') => void;
   setPostSort: (sort: 'newest' | 'popular') => void;
   setPostSearch: (search: string) => void;
+  setPostComments: (postComments: Record<string, Comment[]>) => void;
   toggleLike: (postId: string) => void;
   addComment: (postId: string, content: string) => void;
   getFilteredPosts: () => Post[];
@@ -407,6 +408,49 @@ const aiResponses = [
   "Thank you for sharing that with me. Your feelings are completely valid. Remember, seeking support — whether through this community, a professional, or loved ones — is a sign of strength, not weakness. Is there anything specific I can help you explore further?",
 ];
 
+function buildGroundedAiResponse(content: string, state: {
+  posts: Post[];
+  answers: Record<string, Answer[]>;
+  chatMessages: ChatMessage[];
+}) {
+  const query = content.toLowerCase().trim();
+  const tokens = query.split(/\s+/).filter((token) => token.length > 3);
+
+  const expertAnswers = Object.values(state.answers).flat();
+  const scoredAnswers = expertAnswers
+    .map((answer) => {
+      const text = `${answer.content} ${answer.expert}`.toLowerCase();
+      const score = tokens.reduce((sum, token) => (text.includes(token) ? sum + 1 : sum), 0);
+      return { answer, score };
+    })
+    .sort((a, b) => b.score - a.score);
+
+  if (scoredAnswers[0] && scoredAnswers[0].score > 0) {
+    const top = scoredAnswers[0].answer;
+    return `Based on a verified expert response from ${top.expert}: ${top.content} Please use this as general support information and confirm decisions with your healthcare provider.`
+  }
+
+  const scoredPosts = state.posts
+    .map((post) => {
+      const text = post.content.toLowerCase();
+      const score = tokens.reduce((sum, token) => (text.includes(token) ? sum + 1 : sum), 0);
+      return { post, score };
+    })
+    .sort((a, b) => b.score - a.score);
+
+  if (scoredPosts[0] && scoredPosts[0].score > 0) {
+    const topPost = scoredPosts[0].post;
+    return `Community members shared related experience: "${topPost.content}". This can help with practical coping ideas, but for medical decisions please consult your clinician.`
+  }
+
+  const lastUserMessage = [...state.chatMessages].reverse().find((msg) => !msg.isAi);
+  if (lastUserMessage) {
+    return `Thanks for sharing. Building on your last message ("${lastUserMessage.content}"), I can help with practical next steps and questions to ask your doctor.`
+  }
+
+  return aiResponses[Math.floor(Math.random() * aiResponses.length)];
+}
+
 // ─── Store ─────────────────────────────────────────────────────────────────────
 
 export const useAppStore = create<AppStore>((set, get) => ({
@@ -461,6 +505,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   setPostFilter: (filter) => set({ postFilter: filter }),
   setPostSort: (sort) => set({ postSort: sort }),
   setPostSearch: (search) => set({ postSearch: search }),
+  setPostComments: (postComments) => set({ postComments }),
 
   toggleLike: (postId) =>
     set((s) => ({
@@ -598,9 +643,14 @@ export const useAppStore = create<AppStore>((set, get) => ({
     set((s) => ({ chatMessages: [...s.chatMessages, userMsg], chatLoading: true }));
 
     setTimeout(() => {
+      const state = get();
       const aiMsg: ChatMessage = {
         id: `msg${Date.now() + 1}`,
-        content: aiResponses[Math.floor(Math.random() * aiResponses.length)],
+        content: buildGroundedAiResponse(content, {
+          posts: state.posts,
+          answers: state.answers,
+          chatMessages: state.chatMessages,
+        }),
         isAi: true,
         timestamp: new Date(),
       };

@@ -107,8 +107,18 @@ function FloatingCard({
   );
 }
 
-export function HomePage() {
+export function HomePage({ onGetStarted }: { onGetStarted?: () => void }) {
   const { setView, setChatOpen } = useAppStore();
+  const shouldShowAuth = typeof onGetStarted === 'function';
+
+  const handleGetStarted = () => {
+    if (onGetStarted) {
+      onGetStarted();
+      return;
+    }
+
+    setView('feed');
+  };
 
   return (
     <main className="flex-1 font-sans">
@@ -163,10 +173,10 @@ export function HomePage() {
             <div className="mt-9 flex flex-wrap gap-3">
               <Button
                 size="lg"
-                onClick={() => setView('feed')}
+                onClick={handleGetStarted}
                 className="gap-2 rounded-full px-7 font-semibold"
               >
-                Join the Community
+                {shouldShowAuth ? 'Get Started' : 'Join the Community'}
                 <ArrowRight className="h-4 w-4" />
               </Button>
               <Button
@@ -332,6 +342,11 @@ export function HomePage() {
             {features.map((feature) => {
               const Icon = feature.icon;
               const handleClick = () => {
+                if (shouldShowAuth) {
+                  handleGetStarted();
+                  return;
+                }
+
                 if ('view' in feature && feature.view) setView(feature.view);
                 else setChatOpen(true);
               };
@@ -445,11 +460,11 @@ export function HomePage() {
           <div className="flex shrink-0 flex-col gap-3 sm:flex-row">
             <Button
               size="lg"
-              onClick={() => setView('feed')}
+              onClick={handleGetStarted}
               className="gap-2 rounded-full bg-card px-7 text-foreground hover:bg-card/90"
             >
               <Users className="h-4 w-4" />
-              Explore Community
+              {shouldShowAuth ? 'Get Started' : 'Explore Community'}
             </Button>
             <Button
               size="lg"

@@ -39,6 +39,28 @@ async function initializeDatabase() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `)
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS community_posts (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      category TEXT NOT NULL CHECK (category IN ('pregnancy', 'parenting', 'health', 'general')),
+      content TEXT NOT NULL,
+      is_anonymous BOOLEAN NOT NULL DEFAULT FALSE,
+      likes_count INTEGER NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `)
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS community_comments (
+      id TEXT PRIMARY KEY,
+      post_id TEXT NOT NULL REFERENCES community_posts(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      content TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `)
 }
 
 module.exports = {
