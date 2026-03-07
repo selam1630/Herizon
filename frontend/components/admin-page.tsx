@@ -217,6 +217,29 @@ export function AdminPage() {
                     <span className="font-medium">Motivation:</span> {application.motivation}
                   </p>
                 )}
+                {application.evidencePhotos.length > 0 && (
+                  <div className="mt-2">
+                    <p className="mb-1 text-xs font-medium text-foreground">Evidence Photos:</p>
+                    <div className="grid grid-cols-3 gap-2">
+                      {application.evidencePhotos.map((photo, index) => (
+                        <a
+                          key={`${application.id}-photo-${index}`}
+                          href={photo}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="block overflow-hidden rounded border border-border"
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={photo}
+                            alt={`Evidence ${index + 1}`}
+                            className="h-20 w-full object-cover"
+                          />
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <div className="mt-3 flex gap-2">
                   <Button
                     size="sm"

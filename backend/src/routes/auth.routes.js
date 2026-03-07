@@ -35,6 +35,9 @@ function clearRefreshCookie(res) {
 }
 
 function toPublicUser(row) {
+  const premiumUntil = row.premium_until ? new Date(row.premium_until) : null
+  const isPremiumActive = Boolean(row.is_premium && premiumUntil && premiumUntil.getTime() > Date.now())
+
   return {
     id: row.id,
     name: row.name,
@@ -43,6 +46,8 @@ function toPublicUser(row) {
     bio: row.bio,
     isExpert: row.is_expert,
     isAdmin: row.is_admin,
+    isPremium: isPremiumActive,
+    premiumUntil: row.premium_until,
     createdAt: row.created_at,
   }
 }
@@ -107,7 +112,8 @@ async function createSession(res, user) {
 async function findUserById(userId) {
   const result = await pool.query(
     `
-      SELECT id, name, email, avatar_url, bio, is_expert, is_admin, created_at
+        SELECT id, name, email, avatar_url, bio, is_expert, is_admin, created_at
+        , is_premium, premium_until
       FROM users
       WHERE id = $1
       LIMIT 1
@@ -149,6 +155,7 @@ router.post('/signup', async (req, res) => {
         INSERT INTO users (id, name, email, password_hash, is_admin)
         VALUES ($1, $2, $3, $4, $5)
         RETURNING id, name, email, avatar_url, bio, is_expert, is_admin, created_at
+        , is_premium, premium_until
       `,
       [id, name, email, passwordHash, isAdminEmail(email)]
     )
@@ -176,6 +183,7 @@ router.post('/signin', async (req, res) => {
     const result = await pool.query(
       `
         SELECT id, name, email, avatar_url, bio, is_expert, is_admin, created_at, password_hash
+        , is_premium, premium_until
         FROM users
         WHERE email = $1
         LIMIT 1

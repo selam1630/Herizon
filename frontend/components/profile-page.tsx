@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useAppStore } from '@/lib/store';
-import { signOutSession } from '@/lib/api';
+import { initializePremiumPayment, signOutSession } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -18,6 +18,8 @@ export function ProfilePage() {
   const [name, setName] = useState(currentUser.name);
   const [bio, setBio] = useState(currentUser.bio);
   const [saving, setSaving] = useState(false);
+  const [premiumLoading, setPremiumLoading] = useState(false);
+  const [premiumError, setPremiumError] = useState('');
 
   const userPosts = posts.filter((p) => p.authorId === currentUser.id);
   const savedArticles = articles.filter((a) => currentUser.bookmarks.includes(a.id));
@@ -47,6 +49,25 @@ export function ProfilePage() {
     signOut();
   };
 
+  const handleUpgradePremium = async () => {
+    const phoneNumber = window.prompt('Enter your M-Pesa Safaricom number (2517XXXXXXXX or 07XXXXXXXX):', '');
+    if (!phoneNumber) return;
+
+    setPremiumLoading(true);
+    setPremiumError('');
+    try {
+      const payment = await initializePremiumPayment({ phoneNumber: phoneNumber.trim() });
+      if (payment.checkoutUrl) {
+        window.location.assign(payment.checkoutUrl);
+      } else {
+        setPremiumError(payment.customerMessage || 'M-Pesa STK prompt sent. Complete payment on your phone.');
+      }
+    } catch (error) {
+      setPremiumError(error instanceof Error ? error.message : 'Failed to initialize premium payment');
+    }
+    setPremiumLoading(false);
+  };
+
   return (
     <div className="mx-auto max-w-2xl px-4 py-8 sm:px-6 lg:px-8">
       <h1 className="mb-6 text-xl font-semibold text-foreground">My Profile</h1>
@@ -68,6 +89,11 @@ export function ProfilePage() {
                   {currentUser.isExpert && (
                     <Badge variant="secondary" className="text-xs px-1.5 py-0">
                       Expert
+                    </Badge>
+                  )}
+                  {currentUser.isPremium && (
+                    <Badge className="text-xs px-1.5 py-0">
+                      Premium
                     </Badge>
                   )}
                 </div>
@@ -196,6 +222,28 @@ export function ProfilePage() {
           </div>
         </div>
       )}
+
+      <Separator className="my-8" />
+
+      <div className="rounded-xl border border-border bg-card p-5">
+        <h3 className="text-sm font-medium text-foreground">Premium Membership</h3>
+        <p className="mt-1 text-xs text-muted-foreground">
+          {currentUser.isPremium
+            ? `Active${currentUser.premiumUntil ? ` until ${currentUser.premiumUntil.toLocaleDateString()}` : ''}.`
+            : 'Unlock discounted expert communication by upgrading to premium.'}
+        </p>
+        {!currentUser.isPremium && (
+          <Button
+            className="mt-3"
+            size="sm"
+            onClick={() => void handleUpgradePremium()}
+            disabled={premiumLoading}
+          >
+            {premiumLoading ? 'Redirecting...' : 'Upgrade to Premium'}
+          </Button>
+        )}
+        {premiumError && <p className="mt-2 text-xs text-destructive">{premiumError}</p>}
+      </div>
 
       <Separator className="my-8" />
 

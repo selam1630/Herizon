@@ -15,6 +15,8 @@ export interface User {
   bio: string;
   isExpert: boolean;
   isAdmin: boolean;
+  isPremium: boolean;
+  premiumUntil: Date | null;
   bookmarks: string[];
 }
 
@@ -161,6 +163,8 @@ const mockUser: User = {
   bio: 'First-time mom to a 6-month-old. Love connecting with other moms!',
   isExpert: false,
   isAdmin: false,
+  isPremium: false,
+  premiumUntil: null,
   bookmarks: [],
 };
 
@@ -404,13 +408,7 @@ const mockChatMessages: ChatMessage[] = [
   },
 ];
 
-const aiResponses = [
-  "That's a great question. Based on general guidance, it's always best to discuss this with your healthcare provider for personalized advice. Many mothers find that establishing a routine and seeking community support makes a significant difference.",
-  "You're not alone in feeling this way. This is a very common experience for new and expecting mothers. I'd recommend exploring our educational library for detailed articles on this topic, and consider posting in the community feed to hear from others who've been through it.",
-  "From a general health perspective, self-care is crucial during this time. Rest when you can, stay hydrated, and don't hesitate to ask for help. Our Expert Q&A section has verified healthcare professionals who can provide more specific guidance.",
-  "This is something many mothers navigate. The most important thing is to trust your instincts while also staying connected to your care team. Would you like me to point you to some relevant articles in our library?",
-  "Thank you for sharing that with me. Your feelings are completely valid. Remember, seeking support — whether through this community, a professional, or loved ones — is a sign of strength, not weakness. Is there anything specific I can help you explore further?",
-];
+const CHAT_API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5000';
 
 function buildGroundedAiResponse(content: string, state: {
   posts: Post[];
@@ -447,12 +445,7 @@ function buildGroundedAiResponse(content: string, state: {
     return `Community members shared related experience: "${topPost.content}". This can help with practical coping ideas, but for medical decisions please consult your clinician.`
   }
 
-  const lastUserMessage = [...state.chatMessages].reverse().find((msg) => !msg.isAi);
-  if (lastUserMessage) {
-    return `Thanks for sharing. Building on your last message ("${lastUserMessage.content}"), I can help with practical next steps and questions to ask your doctor.`
-  }
-
-  return aiResponses[Math.floor(Math.random() * aiResponses.length)];
+  return 'I do not have enough verified knowledge from expert and community data for this question. Please ask a verified expert for a reliable answer.';
 }
 
 // ─── Store ─────────────────────────────────────────────────────────────────────
@@ -648,19 +641,44 @@ export const useAppStore = create<AppStore>((set, get) => ({
     };
     set((s) => ({ chatMessages: [...s.chatMessages, userMsg], chatLoading: true }));
 
-    setTimeout(() => {
-      const state = get();
-      const aiMsg: ChatMessage = {
-        id: `msg${Date.now() + 1}`,
-        content: buildGroundedAiResponse(content, {
-          posts: state.posts,
-          answers: state.answers,
-          chatMessages: state.chatMessages,
-        }),
-        isAi: true,
-        timestamp: new Date(),
-      };
-      set((s) => ({ chatMessages: [...s.chatMessages, aiMsg], chatLoading: false }));
-    }, 1200 + Math.random() * 800);
+    const run = async () => {
+      try {
+        const response = await fetch(`${CHAT_API_BASE_URL}/api/v1/chat`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ message: content }),
+        });
+
+        const data = (await response.json().catch(() => ({}))) as { reply?: string; message?: string };
+        if (!response.ok || !data.reply) {
+          throw new Error(data.message || 'Failed to get AI response');
+        }
+
+        const aiMsg: ChatMessage = {
+          id: `msg${Date.now() + 1}`,
+          content: data.reply,
+          isAi: true,
+          timestamp: new Date(),
+        };
+        set((s) => ({ chatMessages: [...s.chatMessages, aiMsg], chatLoading: false }));
+      } catch (_error) {
+        const state = get();
+        const aiMsg: ChatMessage = {
+          id: `msg${Date.now() + 1}`,
+          content: buildGroundedAiResponse(content, {
+            posts: state.posts,
+            answers: state.answers,
+            chatMessages: state.chatMessages,
+          }),
+          isAi: true,
+          timestamp: new Date(),
+        };
+        set((s) => ({ chatMessages: [...s.chatMessages, aiMsg], chatLoading: false }));
+      }
+    };
+
+    void run();
   },
 }));

@@ -12,6 +12,9 @@ import type {
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5000';
 let accessToken: string | null = null;
+let refreshInFlight: Promise<User> | null = null;
+let lastRefreshFailureAt = 0;
+const REFRESH_RETRY_COOLDOWN_MS = 5000;
 
 type ApiArticle = {
   id: string;
@@ -79,6 +82,8 @@ type ApiUser = {
   bio: string;
   isExpert: boolean;
   isAdmin: boolean;
+  isPremium: boolean;
+  premiumUntil: string | null;
   createdAt: string;
 };
 
@@ -131,6 +136,7 @@ export type ExpertApplication = {
   specialty: string;
   credentials: string;
   motivation: string;
+  evidencePhotos: string[];
   pricing: {
     chat: number | null;
     voice: number | null;
@@ -201,6 +207,8 @@ function toUser(user: ApiUser): User {
     bio: user.bio,
     isExpert: user.isExpert,
     isAdmin: user.isAdmin,
+    isPremium: user.isPremium,
+    premiumUntil: user.premiumUntil ? new Date(user.premiumUntil) : null,
     bookmarks: [],
   };
 }
@@ -304,6 +312,16 @@ export function signIn(body: { email: string; password: string }) {
 }
 
 export async function refreshSession(): Promise<User> {
+  const now = Date.now();
+  if (lastRefreshFailureAt && now - lastRefreshFailureAt < REFRESH_RETRY_COOLDOWN_MS) {
+    throw new Error('Not authenticated');
+  }
+
+  if (refreshInFlight) {
+    return refreshInFlight;
+  }
+
+  refreshInFlight = (async () => {
   const response = await fetch(`${API_BASE_URL}/api/v1/auth/refresh`, {
     method: 'POST',
     credentials: 'include',
@@ -312,13 +330,22 @@ export async function refreshSession(): Promise<User> {
   const data = (await response.json()) as AuthPayload | ErrorPayload;
   if (!response.ok) {
     setAccessToken(null);
+    lastRefreshFailureAt = Date.now();
     const message = (data as ErrorPayload).message || 'Failed to refresh session';
     throw new Error(message);
   }
 
   const payload = data as AuthPayload;
   setAccessToken(payload.accessToken);
+  lastRefreshFailureAt = 0;
   return toUser(payload.user);
+  })();
+
+  try {
+    return await refreshInFlight;
+  } finally {
+    refreshInFlight = null;
+  }
 }
 
 export async function signOutSession() {
@@ -506,6 +533,7 @@ export async function createExpertApplication(body: {
   specialty: string;
   credentials: string;
   motivation?: string;
+  evidencePhotos?: string[];
 }): Promise<ExpertApplication> {
   const response = await authRequest('/api/v1/experts/applications', {
     method: 'POST',
@@ -689,6 +717,29 @@ export type ExpertPricing = {
   video: number | null;
 };
 
+export type PaymentBreakdown = {
+  baseAmount: number;
+  discountAmount: number;
+  finalAmount: number;
+  platformFee: number;
+  expertAmount: number;
+  discountPercent?: number;
+  premiumApplied?: boolean;
+};
+
+export type PaymentInitializeResponse = {
+  checkoutUrl?: string;
+  txRef: string;
+  currency?: string;
+  paymentProvider?: string;
+  promptSent?: boolean;
+  customerMessage?: string;
+  checkoutRequestId?: string;
+  pricing?: PaymentBreakdown;
+  amount?: number;
+  premiumDays?: number;
+};
+
 export async function fetchMyExpertPricing(): Promise<ExpertPricing> {
   const response = await authRequest('/api/v1/experts/me/pricing', {
     method: 'GET',
@@ -719,4 +770,67 @@ export async function updateMyExpertPricing(body: {
   }
 
   return data.pricing;
+}
+
+export async function initializePremiumPayment(body: { phoneNumber: string }): Promise<PaymentInitializeResponse> {
+  const response = await authRequest('/api/v1/payments/premium/initialize', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+
+  const data = (await response.json()) as PaymentInitializeResponse & { message?: string; error?: string };
+  if (!response.ok || !data.txRef) {
+    throw new Error(data.error || data.message || 'Failed to initialize premium payment');
+  }
+
+  return data;
+}
+
+export async function initializeExpertCommunicationPayment(body: {
+  expertId: string;
+  mode: 'chat' | 'voice' | 'video';
+  phoneNumber: string;
+}): Promise<PaymentInitializeResponse> {
+  const response = await authRequest('/api/v1/payments/expert-communication/initialize', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+
+  const data = (await response.json()) as PaymentInitializeResponse & { message?: string; error?: string };
+  if (!response.ok || !data.txRef) {
+    throw new Error(data.error || data.message || 'Failed to initialize expert communication payment');
+  }
+
+  return data;
+}
+
+export async function verifyPayment(txRef: string): Promise<{
+  txRef: string;
+  status: string;
+  kind: 'premium_subscription' | 'expert_consultation';
+  pricing: PaymentBreakdown;
+}> {
+  const response = await authRequest(`/api/v1/payments/${encodeURIComponent(txRef)}/verify`, {
+    method: 'POST',
+  });
+
+  const data = (await response.json()) as {
+    txRef?: string;
+    status?: string;
+    kind?: 'premium_subscription' | 'expert_consultation';
+    pricing?: PaymentBreakdown;
+    message?: string;
+  };
+  if (!response.ok || !data.txRef || !data.status || !data.kind || !data.pricing) {
+    throw new Error(data.message || 'Failed to verify payment');
+  }
+
+  return {
+    txRef: data.txRef,
+    status: data.status,
+    kind: data.kind,
+    pricing: data.pricing,
+  };
 }

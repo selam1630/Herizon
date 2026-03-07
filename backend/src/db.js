@@ -45,6 +45,8 @@ async function initializeDatabase() {
       bio TEXT NOT NULL DEFAULT '',
       is_expert BOOLEAN NOT NULL DEFAULT FALSE,
       is_admin BOOLEAN NOT NULL DEFAULT FALSE,
+      is_premium BOOLEAN NOT NULL DEFAULT FALSE,
+      premium_until TIMESTAMPTZ NULL,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `)
@@ -52,6 +54,16 @@ async function initializeDatabase() {
   await pool.query(`
     ALTER TABLE users
     ADD COLUMN IF NOT EXISTS is_admin BOOLEAN NOT NULL DEFAULT FALSE;
+  `)
+
+  await pool.query(`
+    ALTER TABLE users
+    ADD COLUMN IF NOT EXISTS is_premium BOOLEAN NOT NULL DEFAULT FALSE;
+  `)
+
+  await pool.query(`
+    ALTER TABLE users
+    ADD COLUMN IF NOT EXISTS premium_until TIMESTAMPTZ NULL;
   `)
 
   await pool.query(`
@@ -117,6 +129,7 @@ async function initializeDatabase() {
       specialty TEXT NOT NULL,
       credentials TEXT NOT NULL,
       motivation TEXT NOT NULL DEFAULT '',
+      evidence_photos TEXT[] NOT NULL DEFAULT '{}',
       chat_price_usd NUMERIC(10,2) NULL,
       voice_price_usd NUMERIC(10,2) NULL,
       video_price_usd NUMERIC(10,2) NULL,
@@ -145,9 +158,72 @@ async function initializeDatabase() {
   `)
 
   await pool.query(`
+    ALTER TABLE expert_applications
+    ADD COLUMN IF NOT EXISTS evidence_photos TEXT[] NOT NULL DEFAULT '{}';
+  `)
+
+  await pool.query(`
     CREATE UNIQUE INDEX IF NOT EXISTS expert_applications_one_pending_per_user_idx
     ON expert_applications (user_id)
     WHERE status = 'pending';
+  `)
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS payment_transactions (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      kind TEXT NOT NULL CHECK (kind IN ('premium_subscription', 'expert_consultation')),
+      expert_user_id TEXT NULL REFERENCES users(id) ON DELETE SET NULL,
+      service_type TEXT NULL CHECK (service_type IN ('chat', 'voice', 'video', 'premium')),
+      base_amount NUMERIC(10,2) NOT NULL,
+      discount_amount NUMERIC(10,2) NOT NULL DEFAULT 0,
+      final_amount NUMERIC(10,2) NOT NULL,
+      platform_fee_amount NUMERIC(10,2) NOT NULL DEFAULT 0,
+      expert_amount NUMERIC(10,2) NOT NULL DEFAULT 0,
+      tx_ref TEXT NOT NULL UNIQUE,
+      chapa_checkout_url TEXT NULL,
+      chapa_status TEXT NOT NULL DEFAULT 'pending',
+      metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `)
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS voice_calls (
+      id TEXT PRIMARY KEY,
+      caller TEXT NOT NULL DEFAULT '',
+      menu_option TEXT NULL,
+      recording_url TEXT NULL,
+      transcript TEXT NOT NULL DEFAULT '',
+      ai_response TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL CHECK (status IN ('received', 'processed', 'failed')) DEFAULT 'received',
+      error_message TEXT NOT NULL DEFAULT '',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `)
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS voice_calls_created_at_idx
+    ON voice_calls (created_at DESC);
+  `)
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS chat_messages (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NULL REFERENCES users(id) ON DELETE SET NULL,
+      message TEXT NOT NULL,
+      is_ai BOOLEAN NOT NULL DEFAULT FALSE,
+      topic TEXT NULL,
+      source_count INTEGER NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `)
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS chat_messages_created_at_idx
+    ON chat_messages (created_at DESC);
   `)
 
   const adminEmails = getAdminEmails()

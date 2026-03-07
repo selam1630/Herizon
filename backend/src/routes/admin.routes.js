@@ -173,6 +173,7 @@ router.get('/experts/applications', async (_req, res) => {
           a.specialty,
           a.credentials,
           a.motivation,
+          a.evidence_photos,
           a.chat_price_usd,
           a.voice_price_usd,
           a.video_price_usd,
@@ -200,6 +201,7 @@ router.get('/experts/applications', async (_req, res) => {
         specialty: row.specialty,
         credentials: row.credentials,
         motivation: row.motivation,
+        evidencePhotos: Array.isArray(row.evidence_photos) ? row.evidence_photos : [],
         pricing: {
           chat: row.chat_price_usd == null ? null : Number(row.chat_price_usd),
           voice: row.voice_price_usd == null ? null : Number(row.voice_price_usd),
@@ -270,6 +272,7 @@ router.patch('/experts/applications/:applicationId', async (req, res) => {
           a.specialty,
           a.credentials,
           a.motivation,
+          a.evidence_photos,
           a.chat_price_usd,
           a.voice_price_usd,
           a.video_price_usd,
@@ -298,6 +301,7 @@ router.patch('/experts/applications/:applicationId', async (req, res) => {
         specialty: row.specialty,
         credentials: row.credentials,
         motivation: row.motivation,
+        evidencePhotos: Array.isArray(row.evidence_photos) ? row.evidence_photos : [],
         pricing: {
           chat: row.chat_price_usd == null ? null : Number(row.chat_price_usd),
           voice: row.voice_price_usd == null ? null : Number(row.voice_price_usd),

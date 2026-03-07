@@ -1,13 +1,17 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ChangeEvent } from 'react';
 import {
   createExpertApplication,
   createExpertQuestion,
   fetchMyExpertPricing,
   fetchMyExpertApplication,
   fetchVerifiedExperts,
+  initializeExpertCommunicationPayment,
+  initializePremiumPayment,
+  refreshSession,
   updateMyExpertPricing,
+  verifyPayment,
   type ExpertApplication,
   type ExpertPricing,
   type VerifiedExpert,
@@ -66,6 +70,17 @@ const TOPIC_LABELS: Record<ExpertTopic, string> = {
   nutrition: 'Nutrition',
   parenting: 'Parenting',
 };
+const MAX_EVIDENCE_FILES = 3;
+const MAX_EVIDENCE_FILE_SIZE_BYTES = 2 * 1024 * 1024;
+
+function readFileAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ''));
+    reader.onerror = () => reject(new Error('Failed to read selected image'));
+    reader.readAsDataURL(file);
+  });
+}
 
 function QuestionDetail({ questionId, onBack }: { questionId: string; onBack: () => void }) {
   const { questions, answers } = useAppStore();
@@ -265,6 +280,7 @@ function ApplyExpertDialog({
   const [specialty, setSpecialty] = useState('');
   const [credentials, setCredentials] = useState('');
   const [motivation, setMotivation] = useState('');
+  const [evidencePhotos, setEvidencePhotos] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
@@ -277,16 +293,50 @@ function ApplyExpertDialog({
         specialty: specialty.trim(),
         credentials: credentials.trim(),
         motivation: motivation.trim(),
+        evidencePhotos,
       });
       onSubmitted(application);
       setSpecialty('');
       setCredentials('');
       setMotivation('');
+      setEvidencePhotos([]);
       onOpenChange(false);
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : 'Failed to submit application');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleEvidenceFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files || []);
+    event.target.value = '';
+
+    if (files.length === 0) return;
+    const remainingSlots = MAX_EVIDENCE_FILES - evidencePhotos.length;
+    if (remainingSlots <= 0) {
+      setError(`You can upload up to ${MAX_EVIDENCE_FILES} evidence photos.`);
+      return;
+    }
+
+    const acceptedFiles = files.slice(0, remainingSlots);
+    for (const file of acceptedFiles) {
+      if (!file.type.startsWith('image/')) {
+        setError('Only image files are allowed for evidence photos.');
+        return;
+      }
+      if (file.size > MAX_EVIDENCE_FILE_SIZE_BYTES) {
+        setError('Each evidence photo must be 2MB or smaller.');
+        return;
+      }
+    }
+
+    setError('');
+    try {
+      const encoded = await Promise.all(acceptedFiles.map((file) => readFileAsDataUrl(file)));
+      setEvidencePhotos((prev) => [...prev, ...encoded]);
+    } catch (uploadError) {
+      setError(uploadError instanceof Error ? uploadError.message : 'Failed to process evidence image');
     }
   };
 
@@ -329,6 +379,40 @@ function ApplyExpertDialog({
               onChange={(e) => setMotivation(e.target.value)}
             />
           </div>
+          <div className="space-y-2">
+            <Label htmlFor="expert-evidence">Credential evidence photos (optional, up to 3)</Label>
+            <Input
+              id="expert-evidence"
+              type="file"
+              accept="image/*"
+              multiple
+              onChange={handleEvidenceFileChange}
+              disabled={evidencePhotos.length >= MAX_EVIDENCE_FILES}
+            />
+            <p className="text-xs text-muted-foreground">
+              Upload license/certificate photos. Max 2MB each.
+            </p>
+            {evidencePhotos.length > 0 && (
+              <div className="grid grid-cols-3 gap-2">
+                {evidencePhotos.map((photo, index) => (
+                  <div key={`${index}-${photo.slice(0, 32)}`} className="relative overflow-hidden rounded-md border border-border">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={photo} alt={`Evidence ${index + 1}`} className="h-20 w-full object-cover" />
+                    <button
+                      type="button"
+                      aria-label={`Remove evidence ${index + 1}`}
+                      className="absolute right-1 top-1 rounded-full bg-black/60 p-1 text-white"
+                      onClick={() => {
+                        setEvidencePhotos((prev) => prev.filter((_, itemIndex) => itemIndex !== index));
+                      }}
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
           {error && <p className="text-xs text-destructive">{error}</p>}
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
@@ -343,7 +427,15 @@ function ApplyExpertDialog({
 }
 
 export function ExpertsPage() {
-  const { currentUser, expertFilter, expertSearch, setExpertFilter, setExpertSearch, getFilteredQuestions } = useAppStore();
+  const {
+    currentUser,
+    expertFilter,
+    expertSearch,
+    setExpertFilter,
+    setExpertSearch,
+    getFilteredQuestions,
+    setAuthenticatedUser,
+  } = useAppStore();
   const [askOpen, setAskOpen] = useState(false);
   const [applyOpen, setApplyOpen] = useState(false);
   const [selectedQuestionId, setSelectedQuestionId] = useState<string | null>(null);
@@ -356,8 +448,16 @@ export function ExpertsPage() {
   const [pricingSaving, setPricingSaving] = useState(false);
   const [pricingError, setPricingError] = useState('');
   const [pricingSuccess, setPricingSuccess] = useState('');
+  const [paymentBusyKey, setPaymentBusyKey] = useState('');
+  const [paymentError, setPaymentError] = useState('');
+  const [premiumBusy, setPremiumBusy] = useState(false);
 
   const filteredQuestions = getFilteredQuestions();
+  const premiumActive = Boolean(
+    currentUser.isPremium &&
+      currentUser.premiumUntil &&
+      currentUser.premiumUntil.getTime() > Date.now()
+  );
 
   useEffect(() => {
     let active = true;
@@ -435,6 +535,79 @@ export function ExpertsPage() {
     }
   };
 
+  const askPhoneNumber = () => {
+    const input = window.prompt('Enter your M-Pesa Safaricom number (2517XXXXXXXX or 07XXXXXXXX):', '');
+    if (!input) return '';
+    return input.trim();
+  };
+
+  const pollPaymentStatus = async (txRef: string) => {
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 4000));
+      try {
+        const verification = await verifyPayment(txRef);
+        if (verification.status === 'success') {
+          const user = await refreshSession();
+          setAuthenticatedUser(user);
+          setPaymentError('Payment successful. Premium/consultation access updated.');
+          return;
+        }
+      } catch (_error) {
+        // Keep polling for a short time to allow asynchronous provider callback.
+      }
+    }
+  };
+
+  const startExpertCommunicationPayment = async (
+    expertId: string,
+    mode: 'chat' | 'voice' | 'video'
+  ) => {
+    const key = `${expertId}-${mode}`;
+    const phoneNumber = askPhoneNumber();
+    if (!phoneNumber) {
+      return;
+    }
+    setPaymentBusyKey(key);
+    setPaymentError('');
+    try {
+      const payment = await initializeExpertCommunicationPayment({ expertId, mode, phoneNumber });
+      if (payment.checkoutUrl) {
+        window.location.assign(payment.checkoutUrl);
+        return;
+      }
+      setPaymentError(payment.customerMessage || 'M-Pesa prompt sent. Complete PIN on your phone.');
+      void pollPaymentStatus(payment.txRef);
+    } catch (error) {
+      setPaymentError(error instanceof Error ? error.message : 'Failed to initialize payment');
+      setPaymentBusyKey('');
+      return;
+    }
+    setPaymentBusyKey('');
+  };
+
+  const startPremiumPayment = async () => {
+    const phoneNumber = askPhoneNumber();
+    if (!phoneNumber) {
+      return;
+    }
+    setPremiumBusy(true);
+    setPaymentError('');
+    try {
+      const payment = await initializePremiumPayment({ phoneNumber });
+      if (payment.checkoutUrl) {
+        window.location.assign(payment.checkoutUrl);
+        return;
+      }
+      setPaymentError(payment.customerMessage || 'M-Pesa prompt sent. Complete PIN on your phone.');
+      void pollPaymentStatus(payment.txRef);
+    } catch (error) {
+      setPaymentError(error instanceof Error ? error.message : 'Failed to initialize premium payment');
+      setPremiumBusy(false);
+      return;
+    }
+    setPremiumBusy(false);
+  };
+
   if (selectedQuestionId) {
     return (
       <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6 lg:px-8">
@@ -481,31 +654,69 @@ export function ExpertsPage() {
       )}
 
       <div className="mb-6 flex flex-wrap gap-2 rounded-xl border border-border bg-card p-4">
-        <div className="mb-2 w-full">
-          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Our verified experts</p>
+        <div className="mb-2 flex w-full items-start justify-between gap-3">
+          <div>
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Our verified experts</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {premiumActive
+                ? 'Premium discount is active on expert communication payments.'
+                : 'Upgrade to premium to get a discount on expert communication payments.'}
+            </p>
+          </div>
+          {!currentUser.isExpert && (
+            <Button size="sm" onClick={() => void startPremiumPayment()} disabled={premiumBusy}>
+              {premiumBusy ? 'Processing...' : premiumActive ? 'Extend Premium' : 'Go Premium'}
+            </Button>
+          )}
         </div>
         {verifiedExperts.length === 0 && (
           <p className="text-xs text-muted-foreground">No verified experts listed yet.</p>
         )}
         {verifiedExperts.map((expert) => (
-          <div key={expert.id} className="flex items-center gap-1.5 rounded-full border border-border bg-background px-3 py-1.5 text-xs">
-            <CheckCircle2 className="h-3 w-3 shrink-0 text-primary" />
-            <span className="text-foreground">
-              {expert.name}
-              {expert.specialty ? ` — ${expert.specialty}` : ''}
-              {expert.pricing.chat != null || expert.pricing.voice != null || expert.pricing.video != null
-                ? ` (${[
-                    expert.pricing.chat != null ? `chat $${expert.pricing.chat}` : null,
-                    expert.pricing.voice != null ? `voice $${expert.pricing.voice}` : null,
-                    expert.pricing.video != null ? `video $${expert.pricing.video}` : null,
-                  ]
-                    .filter(Boolean)
-                    .join(' / ')})`
-                : ''}
-            </span>
+          <div key={expert.id} className="w-full rounded-lg border border-border bg-background p-3 text-xs">
+            <div className="flex items-center gap-1.5 text-foreground">
+              <CheckCircle2 className="h-3 w-3 shrink-0 text-primary" />
+              <span className="font-medium">
+                {expert.name}
+                {expert.specialty ? ` — ${expert.specialty}` : ''}
+              </span>
+            </div>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={expert.id === currentUser.id || expert.pricing.chat == null || paymentBusyKey === `${expert.id}-chat`}
+                onClick={() => void startExpertCommunicationPayment(expert.id, 'chat')}
+              >
+                {paymentBusyKey === `${expert.id}-chat`
+                  ? 'Processing...'
+                  : `Chat $${expert.pricing.chat ?? 'N/A'}`}
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={expert.id === currentUser.id || expert.pricing.voice == null || paymentBusyKey === `${expert.id}-voice`}
+                onClick={() => void startExpertCommunicationPayment(expert.id, 'voice')}
+              >
+                {paymentBusyKey === `${expert.id}-voice`
+                  ? 'Processing...'
+                  : `Voice $${expert.pricing.voice ?? 'N/A'}`}
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={expert.id === currentUser.id || expert.pricing.video == null || paymentBusyKey === `${expert.id}-video`}
+                onClick={() => void startExpertCommunicationPayment(expert.id, 'video')}
+              >
+                {paymentBusyKey === `${expert.id}-video`
+                  ? 'Processing...'
+                  : `Video $${expert.pricing.video ?? 'N/A'}`}
+              </Button>
+            </div>
           </div>
         ))}
       </div>
+      {paymentError && <p className="-mt-3 mb-5 text-xs text-destructive">{paymentError}</p>}
 
       {currentUser.isExpert && (
         <div className="mb-6 rounded-xl border border-border bg-card p-4">

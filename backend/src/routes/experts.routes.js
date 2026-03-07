@@ -5,6 +5,44 @@ const { pool } = require('../db')
 const { requireAuth } = require('../middleware/auth.middleware')
 
 const router = express.Router()
+const MAX_EVIDENCE_PHOTOS = 3
+const MAX_EVIDENCE_PHOTO_CHARS = 3_000_000
+
+function normalizeEvidencePhotos(value) {
+  if (value == null) {
+    return []
+  }
+
+  if (!Array.isArray(value)) {
+    return null
+  }
+
+  const normalized = []
+  for (const item of value) {
+    if (typeof item !== 'string') {
+      return null
+    }
+    const trimmed = item.trim()
+    if (!trimmed) {
+      continue
+    }
+    const isUrl = /^https?:\/\//i.test(trimmed)
+    const isImageDataUrl = /^data:image\/[a-z0-9.+-]+;base64,/i.test(trimmed)
+    if (!isUrl && !isImageDataUrl) {
+      return null
+    }
+    if (trimmed.length > MAX_EVIDENCE_PHOTO_CHARS) {
+      return null
+    }
+    normalized.push(trimmed)
+  }
+
+  if (normalized.length > MAX_EVIDENCE_PHOTOS) {
+    return null
+  }
+
+  return normalized
+}
 
 function toQuestion(row) {
   return {
@@ -39,6 +77,7 @@ function toApplication(row) {
     specialty: row.specialty,
     credentials: row.credentials,
     motivation: row.motivation,
+    evidencePhotos: Array.isArray(row.evidence_photos) ? row.evidence_photos : [],
     pricing: {
       chat: row.chat_price_usd == null ? null : Number(row.chat_price_usd),
       voice: row.voice_price_usd == null ? null : Number(row.voice_price_usd),
@@ -101,7 +140,7 @@ router.get('/applications/me', requireAuth, async (req, res) => {
     const result = await pool.query(
       `
         SELECT id, user_id, specialty, credentials, motivation, status, reviewed_note, reviewed_at, created_at, updated_at
-        , chat_price_usd, voice_price_usd, video_price_usd
+        , chat_price_usd, voice_price_usd, video_price_usd, evidence_photos
         FROM expert_applications
         WHERE user_id = $1
         ORDER BY created_at DESC
@@ -126,9 +165,16 @@ router.post('/applications', requireAuth, async (req, res) => {
     const specialty = String(req.body.specialty || '').trim()
     const credentials = String(req.body.credentials || '').trim()
     const motivation = String(req.body.motivation || '').trim()
+    const evidencePhotos = normalizeEvidencePhotos(req.body.evidencePhotos)
 
     if (!specialty || !credentials) {
       return res.status(400).json({ message: 'Specialty and credentials are required' })
+    }
+    if (evidencePhotos == null) {
+      return res.status(400).json({
+        message:
+          'evidencePhotos must be up to 3 image URLs or base64 image data URLs',
+      })
     }
 
     const existingPending = await pool.query(
@@ -148,11 +194,11 @@ router.post('/applications', requireAuth, async (req, res) => {
     const id = randomUUID()
     const inserted = await pool.query(
       `
-        INSERT INTO expert_applications (id, user_id, specialty, credentials, motivation)
-        VALUES ($1, $2, $3, $4, $5)
-        RETURNING id, user_id, specialty, credentials, motivation, chat_price_usd, voice_price_usd, video_price_usd, status, reviewed_note, reviewed_at, created_at, updated_at
+        INSERT INTO expert_applications (id, user_id, specialty, credentials, motivation, evidence_photos)
+        VALUES ($1, $2, $3, $4, $5, $6)
+        RETURNING id, user_id, specialty, credentials, motivation, evidence_photos, chat_price_usd, voice_price_usd, video_price_usd, status, reviewed_note, reviewed_at, created_at, updated_at
       `,
-      [id, userId, specialty, credentials, motivation]
+      [id, userId, specialty, credentials, motivation, evidencePhotos]
     )
 
     return res.status(201).json({ application: toApplication(inserted.rows[0]) })

@@ -4,6 +4,9 @@ const authRoutes = require('./auth.routes')
 const communityRoutes = require('./community.routes')
 const expertsRoutes = require('./experts.routes')
 const adminRoutes = require('./admin.routes')
+const paymentsRoutes = require('./payments.routes')
+const voiceRoutes = require('./voice.routes')
+const chatRoutes = require('./chat.routes')
 
 const router = express.Router()
 
@@ -31,6 +34,15 @@ router.get('/', (_req, res) => {
       'POST /api/v1/experts/applications',
       'GET /api/v1/experts/me/pricing',
       'PATCH /api/v1/experts/me/pricing',
+      'POST /api/v1/payments/premium/initialize',
+      'POST /api/v1/payments/expert-communication/initialize',
+      'POST /api/v1/payments/:txRef/verify',
+      'POST /api/v1/payments/mpesa/callback',
+      'GET /api/v1/payments/me',
+      'POST /api/v1/voice/incoming',
+      'POST /api/v1/voice/recording-complete',
+      'POST /api/v1/chat',
+      'GET /api/v1/chat/history',
       'GET /api/v1/admin/users',
       'PATCH /api/v1/admin/users/:userId/roles',
       'GET /api/v1/admin/community/posts',
@@ -65,6 +77,9 @@ router.get('/v1/articles', (_req, res) => {
 router.use('/v1/auth', authRoutes)
 router.use('/v1/community', communityRoutes)
 router.use('/v1/experts', expertsRoutes)
+router.use('/v1/payments', paymentsRoutes)
+router.use('/v1/voice', voiceRoutes)
+router.use('/v1/chat', chatRoutes)
 router.use('/v1/admin', adminRoutes)
 
 module.exports = router
