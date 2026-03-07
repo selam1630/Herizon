@@ -70,6 +70,9 @@ const TOPIC_LABELS: Record<ExpertTopic, string> = {
   nutrition: 'Nutrition',
   parenting: 'Parenting',
 };
+const C1 = '#CAA69B';
+const C2 = '#CB978E';
+const C3 = '#D4B9B2';
 const MAX_EVIDENCE_FILES = 3;
 const MAX_EVIDENCE_FILE_SIZE_BYTES = 2 * 1024 * 1024;
 
@@ -610,36 +613,58 @@ export function ExpertsPage() {
 
   if (selectedQuestionId) {
     return (
-      <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
         <QuestionDetail questionId={selectedQuestionId} onBack={() => setSelectedQuestionId(null)} />
       </div>
     );
   }
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6 lg:px-8">
-      <div className="mb-6 flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-semibold text-foreground">Ask Experts</h1>
-          <p className="mt-0.5 text-sm text-muted-foreground">
-            Questions answered by verified healthcare professionals.
-          </p>
-        </div>
-        <div className="flex gap-2">
-          {!currentUser.isExpert && (
-            <Button variant="outline" onClick={() => setApplyOpen(true)} className="shrink-0">
-              Apply as Expert
+    <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
+      <div
+        className="mb-6 overflow-hidden rounded-3xl border p-6 sm:p-8"
+        style={{
+          background: 'linear-gradient(135deg, #f9ede9 0%, #f5e6e2 50%, #eeddd9 100%)',
+          borderColor: '#ecddd9',
+        }}
+      >
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <div className="mb-2 flex items-center gap-2">
+              <span className="h-2 w-2 rounded-full" style={{ background: C2 }} />
+              <span className="text-xs font-bold uppercase tracking-widest" style={{ color: C2 }}>
+                Ask Experts
+              </span>
+            </div>
+            <h1 className="text-2xl font-extrabold text-gray-800 sm:text-3xl">Professional Guidance</h1>
+            <p className="mt-1 text-sm text-gray-500">
+              Questions answered by verified healthcare professionals.
+            </p>
+          </div>
+          <div className="flex gap-2">
+            {!currentUser.isExpert && (
+              <Button
+                variant="outline"
+                onClick={() => setApplyOpen(true)}
+                className="shrink-0 border-[#d4b9b2] bg-white/70 text-[#cb978e] hover:bg-white"
+              >
+                Apply as Expert
+              </Button>
+            )}
+            <Button
+              onClick={() => setAskOpen(true)}
+              className="shrink-0 gap-1.5 text-white"
+              style={{ background: C2 }}
+            >
+              <Plus className="h-4 w-4" />
+              Ask a Question
             </Button>
-          )}
-          <Button onClick={() => setAskOpen(true)} className="shrink-0 gap-1.5">
-            <Plus className="h-4 w-4" />
-            Ask a Question
-          </Button>
+          </div>
         </div>
       </div>
 
       {!currentUser.isExpert && (
-        <div className="mb-4 rounded-lg border border-border bg-card p-3">
+        <div className="mb-4 rounded-xl border bg-white p-4" style={{ borderColor: '#ecddd9' }}>
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Expert application status</p>
           <p className="mt-1 text-sm text-foreground">
             {!application && 'No application submitted yet.'}
@@ -653,29 +678,29 @@ export function ExpertsPage() {
         </div>
       )}
 
-      <div className="mb-6 flex flex-wrap gap-2 rounded-xl border border-border bg-card p-4">
+      <div className="mb-6 flex flex-wrap gap-2 rounded-2xl border bg-white p-5 shadow-sm" style={{ borderColor: '#ecddd9' }}>
         <div className="mb-2 flex w-full items-start justify-between gap-3">
           <div>
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Our verified experts</p>
-            <p className="mt-1 text-xs text-muted-foreground">
+            <p className="text-xs font-medium uppercase tracking-wide" style={{ color: C2 }}>Our verified experts</p>
+            <p className="mt-1 text-xs text-gray-500">
               {premiumActive
                 ? 'Premium discount is active on expert communication payments.'
                 : 'Upgrade to premium to get a discount on expert communication payments.'}
             </p>
           </div>
           {!currentUser.isExpert && (
-            <Button size="sm" onClick={() => void startPremiumPayment()} disabled={premiumBusy}>
+            <Button size="sm" onClick={() => void startPremiumPayment()} disabled={premiumBusy} style={{ background: C2 }}>
               {premiumBusy ? 'Processing...' : premiumActive ? 'Extend Premium' : 'Go Premium'}
             </Button>
           )}
         </div>
         {verifiedExperts.length === 0 && (
-          <p className="text-xs text-muted-foreground">No verified experts listed yet.</p>
+          <p className="text-xs text-gray-500">No verified experts listed yet.</p>
         )}
         {verifiedExperts.map((expert) => (
-          <div key={expert.id} className="w-full rounded-lg border border-border bg-background p-3 text-xs">
+          <div key={expert.id} className="w-full rounded-xl border p-3 text-xs" style={{ borderColor: '#ecddd9', background: '#fffafb' }}>
             <div className="flex items-center gap-1.5 text-foreground">
-              <CheckCircle2 className="h-3 w-3 shrink-0 text-primary" />
+              <CheckCircle2 className="h-3 w-3 shrink-0" style={{ color: C2 }} />
               <span className="font-medium">
                 {expert.name}
                 {expert.specialty ? ` — ${expert.specialty}` : ''}
@@ -685,6 +710,7 @@ export function ExpertsPage() {
               <Button
                 size="sm"
                 variant="outline"
+                className="border-[#d4b9b2] text-[#cb978e] hover:bg-white"
                 disabled={expert.id === currentUser.id || expert.pricing.chat == null || paymentBusyKey === `${expert.id}-chat`}
                 onClick={() => void startExpertCommunicationPayment(expert.id, 'chat')}
               >
@@ -695,6 +721,7 @@ export function ExpertsPage() {
               <Button
                 size="sm"
                 variant="outline"
+                className="border-[#d4b9b2] text-[#cb978e] hover:bg-white"
                 disabled={expert.id === currentUser.id || expert.pricing.voice == null || paymentBusyKey === `${expert.id}-voice`}
                 onClick={() => void startExpertCommunicationPayment(expert.id, 'voice')}
               >
@@ -705,6 +732,7 @@ export function ExpertsPage() {
               <Button
                 size="sm"
                 variant="outline"
+                className="border-[#d4b9b2] text-[#cb978e] hover:bg-white"
                 disabled={expert.id === currentUser.id || expert.pricing.video == null || paymentBusyKey === `${expert.id}-video`}
                 onClick={() => void startExpertCommunicationPayment(expert.id, 'video')}
               >
@@ -719,7 +747,7 @@ export function ExpertsPage() {
       {paymentError && <p className="-mt-3 mb-5 text-xs text-destructive">{paymentError}</p>}
 
       {currentUser.isExpert && (
-        <div className="mb-6 rounded-xl border border-border bg-card p-4">
+        <div className="mb-6 rounded-xl border bg-white p-4" style={{ borderColor: '#ecddd9' }}>
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Your consultation pricing</p>
           <p className="mt-1 text-xs text-muted-foreground">Set your own price after admin approval.</p>
           <div className="mt-3 grid gap-2 sm:grid-cols-3">
@@ -748,7 +776,7 @@ export function ExpertsPage() {
           placeholder="Search questions..."
           value={expertSearch}
           onChange={(e) => setExpertSearch(e.target.value)}
-          className="h-9 pl-9 text-sm"
+          className="h-10 rounded-xl border-[#ecddd9] bg-white pl-9 text-sm"
         />
         {expertSearch && (
           <button
@@ -768,8 +796,8 @@ export function ExpertsPage() {
             onClick={() => setExpertFilter(t.value)}
             className={`rounded-full border px-3.5 py-1 text-xs font-medium transition-colors ${
               expertFilter === t.value
-                ? 'border-primary bg-primary text-primary-foreground'
-                : 'border-border bg-card text-muted-foreground hover:border-primary/40 hover:text-foreground'
+                ? 'border-[#cb978e] bg-[#cb978e] text-white'
+                : 'border-[#ecddd9] bg-white text-gray-500 hover:border-[#cb978e]/40 hover:text-gray-700'
             }`}
           >
             {t.label}
@@ -793,7 +821,8 @@ export function ExpertsPage() {
           filteredQuestions.map((q) => (
             <article
               key={q.id}
-              className="cursor-pointer rounded-xl border border-border bg-card p-5 transition-all hover:border-primary/30 hover:shadow-sm"
+              className="cursor-pointer rounded-2xl border bg-white p-5 transition-all hover:-translate-y-0.5 hover:shadow-md"
+              style={{ borderColor: '#ecddd9' }}
               onClick={() => setSelectedQuestionId(q.id)}
               tabIndex={0}
               onKeyDown={(e) => e.key === 'Enter' && setSelectedQuestionId(q.id)}
@@ -822,7 +851,7 @@ export function ExpertsPage() {
 
               <div className="mt-3 flex items-center gap-1.5 text-xs">
                 {q.answerCount > 0 ? (
-                  <span className="flex items-center gap-1 font-medium text-primary">
+                  <span className="flex items-center gap-1 font-medium" style={{ color: C2 }}>
                     <CheckCircle2 className="h-3.5 w-3.5" />
                     {q.answerCount} expert {q.answerCount === 1 ? 'answer' : 'answers'}
                   </span>

@@ -42,6 +42,7 @@ const CATEGORY_COLORS: Record<PostCategory, string> = {
   health: 'bg-teal-100 text-teal-700 border-teal-200',
   general: 'bg-orange-100 text-orange-700 border-orange-200',
 };
+const C2 = '#CB978E';
 
 // ─── Post Card ────────────────────────────────────────────────────────────────
 
@@ -56,7 +57,8 @@ function PostCard({
 
   return (
     <article
-      className="group cursor-pointer rounded-xl border border-border bg-card p-5 transition-all hover:border-primary/30 hover:shadow-sm"
+      className="group cursor-pointer rounded-2xl border bg-white p-5 transition-all hover:-translate-y-0.5 hover:shadow-md"
+      style={{ borderColor: '#ecddd9' }}
       onClick={onClick}
       tabIndex={0}
       onKeyDown={(e) => e.key === 'Enter' && onClick()}
@@ -95,9 +97,8 @@ function PostCard({
             e.stopPropagation();
             toggleLike(post.id);
           }}
-          className={`flex items-center gap-1.5 text-sm transition-colors ${
-            post.isLiked ? 'text-primary' : 'text-muted-foreground hover:text-primary'
-          }`}
+          className={`flex items-center gap-1.5 text-sm transition-colors ${post.isLiked ? '' : 'text-muted-foreground hover:text-foreground'}`}
+          style={{ color: post.isLiked ? C2 : undefined }}
           aria-label={post.isLiked ? 'Unlike post' : 'Like post'}
         >
           <Heart className="h-4 w-4" fill={post.isLiked ? 'currentColor' : 'none'} />
@@ -158,7 +159,7 @@ function PostDetail({ postId, onBack }: { postId: string; onBack: () => void }) 
       </button>
 
       {/* Post */}
-      <div className="rounded-xl border border-border bg-card p-6">
+      <div className="rounded-2xl border bg-white p-6" style={{ borderColor: '#ecddd9' }}>
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-3">
             <Avatar className="h-10 w-10">
@@ -184,9 +185,8 @@ function PostDetail({ postId, onBack }: { postId: string; onBack: () => void }) 
         <div className="mt-5 flex items-center gap-4 border-t border-border pt-4">
           <button
             onClick={() => toggleLike(post.id)}
-            className={`flex items-center gap-1.5 text-sm transition-colors ${
-              post.isLiked ? 'text-primary' : 'text-muted-foreground hover:text-primary'
-            }`}
+            className={`flex items-center gap-1.5 text-sm transition-colors ${post.isLiked ? '' : 'text-muted-foreground hover:text-foreground'}`}
+            style={{ color: post.isLiked ? C2 : undefined }}
           >
             <Heart className="h-4 w-4" fill={post.isLiked ? 'currentColor' : 'none'} />
             <span>{post.likes} likes</span>
@@ -210,7 +210,7 @@ function PostDetail({ postId, onBack }: { postId: string; onBack: () => void }) 
             </p>
           )}
           {comments.map((comment) => (
-            <div key={comment.id} className="flex gap-3 rounded-lg border border-border bg-card p-4">
+            <div key={comment.id} className="flex gap-3 rounded-xl border bg-white p-4" style={{ borderColor: '#ecddd9' }}>
               <Avatar className="h-8 w-8 shrink-0">
                 <AvatarImage src={comment.avatar} alt={comment.author} />
                 <AvatarFallback className="bg-muted text-xs">
@@ -231,7 +231,7 @@ function PostDetail({ postId, onBack }: { postId: string; onBack: () => void }) 
         </div>
 
         {/* Add comment */}
-        <div className="mt-4 flex gap-3 rounded-lg border border-border bg-card p-4">
+        <div className="mt-4 flex gap-3 rounded-xl border bg-white p-4" style={{ borderColor: '#ecddd9' }}>
           <Avatar className="h-8 w-8 shrink-0">
             <AvatarImage src={currentUser.avatar} alt={currentUser.name} />
             <AvatarFallback className="bg-primary/20 text-primary text-xs font-semibold">
@@ -377,19 +377,30 @@ export function CommunityFeed() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6 lg:px-8">
-      {/* Header */}
-      <div className="mb-6 flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-semibold text-foreground">Community</h1>
-          <p className="mt-0.5 text-sm text-muted-foreground">
-            A safe space to share, ask, and support.
-          </p>
+    <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
+      <div
+        className="mb-6 overflow-hidden rounded-3xl border p-6 sm:p-8"
+        style={{
+          background: 'linear-gradient(135deg, #f9ede9 0%, #f5e6e2 50%, #eeddd9 100%)',
+          borderColor: '#ecddd9',
+        }}
+      >
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <div className="mb-2 flex items-center gap-2">
+              <span className="h-2 w-2 rounded-full" style={{ background: C2 }} />
+              <span className="text-xs font-bold uppercase tracking-widest" style={{ color: C2 }}>
+                Community
+              </span>
+            </div>
+            <h1 className="text-2xl font-extrabold text-gray-800 sm:text-3xl">Support Circle</h1>
+            <p className="mt-1 text-sm text-gray-500">A safe space to share, ask, and support.</p>
+          </div>
+          <Button onClick={() => setNewPostOpen(true)} className="shrink-0 gap-1.5 text-white" style={{ background: C2 }}>
+            <Plus className="h-4 w-4" />
+            New Post
+          </Button>
         </div>
-        <Button onClick={() => setNewPostOpen(true)} className="shrink-0 gap-1.5">
-          <Plus className="h-4 w-4" />
-          New Post
-        </Button>
       </div>
 
       {/* Filters */}
@@ -400,7 +411,7 @@ export function CommunityFeed() {
             placeholder="Search posts..."
             value={postSearch}
             onChange={(e) => setPostSearch(e.target.value)}
-            className="pl-9 text-sm h-9"
+            className="h-10 rounded-xl border-[#ecddd9] bg-white pl-9 text-sm"
           />
           {postSearch && (
             <button
@@ -413,7 +424,7 @@ export function CommunityFeed() {
           )}
         </div>
         <Select value={postSort} onValueChange={(v) => setPostSort(v as 'newest' | 'popular')}>
-          <SelectTrigger className="w-full sm:w-36 h-9 text-sm gap-1.5">
+          <SelectTrigger className="h-10 w-full gap-1.5 rounded-xl border-[#ecddd9] bg-white text-sm sm:w-40">
             <ArrowUpDown className="h-3.5 w-3.5" />
             <SelectValue />
           </SelectTrigger>
@@ -432,8 +443,8 @@ export function CommunityFeed() {
             onClick={() => setPostFilter(cat.value)}
             className={`rounded-full border px-3.5 py-1 text-xs font-medium transition-colors ${
               postFilter === cat.value
-                ? 'border-primary bg-primary text-primary-foreground'
-                : 'border-border bg-card text-muted-foreground hover:border-primary/40 hover:text-foreground'
+                ? 'border-[#cb978e] bg-[#cb978e] text-white'
+                : 'border-[#ecddd9] bg-white text-gray-500 hover:border-[#cb978e]/40 hover:text-gray-700'
             }`}
           >
             {cat.label}
@@ -442,7 +453,7 @@ export function CommunityFeed() {
       </div>
 
       {/* Posts */}
-      <div className="flex flex-col gap-3">
+      <div className="grid gap-3 sm:grid-cols-2">
         {filteredPosts.length === 0 ? (
           <div className="py-16 text-center">
             <p className="text-sm font-medium text-foreground">No posts found</p>

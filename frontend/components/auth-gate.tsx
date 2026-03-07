@@ -1,12 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useAppStore } from '@/lib/store';
-import { refreshSession, signIn, signUp } from '@/lib/api';
-import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
-import { Card, CardContent } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
+import { refreshSession, signIn, signUp } from '@/lib/api';
+import { useAppStore } from '@/lib/store';
+import { Loader2 } from 'lucide-react';
+import { useEffect, useState } from 'react';
 
 type Mode = 'signin' | 'signup';
 
@@ -14,137 +14,268 @@ export function AuthGate({ initialMode = 'signin' }: { initialMode?: Mode }) {
   const setAuthenticatedUser = useAppStore((s) => s.setAuthenticatedUser);
 
   const [mode, setMode] = useState<Mode>(initialMode);
+  const [error, setError] = useState('');
+
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+
   const [loading, setLoading] = useState(false);
   const [bootstrapping, setBootstrapping] = useState(true);
-  const [error, setError] = useState('');
 
   useEffect(() => {
     async function bootstrapAuth() {
       try {
         const user = await refreshSession();
         setAuthenticatedUser(user);
-      } catch (_error) {
-        // User is not logged in or refresh token is invalid.
+      } catch {
+        // No valid session yet.
       } finally {
         setBootstrapping(false);
       }
     }
 
-    bootstrapAuth();
+    void bootstrapAuth();
   }, [setAuthenticatedUser]);
 
   useEffect(() => {
     setMode(initialMode);
+    setError('');
   }, [initialMode]);
 
-  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  const reset = () => {
     setError('');
-    setLoading(true);
+    setName('');
+    setPassword('');
+    setConfirmPassword('');
+  };
 
+  const switchMode = (m: Mode) => {
+    reset();
+    setMode(m);
+  };
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError('');
+
+    if (mode === 'signup') {
+      if (password !== confirmPassword) {
+        setError('Passwords do not match');
+        return;
+      }
+      if (password.length < 8) {
+        setError('Password must be at least 8 characters');
+        return;
+      }
+    }
+
+    setLoading(true);
     try {
       const payload =
         mode === 'signup'
-          ? await signUp({ name, email, password })
+          ? await signUp({ name: name.trim() || 'New User', email, password })
           : await signIn({ email, password });
 
       setAuthenticatedUser(payload.user);
-    } catch (submitError) {
-      const message = submitError instanceof Error ? submitError.message : 'Authentication failed';
-      setError(message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Authentication failed');
     } finally {
       setLoading(false);
     }
   }
 
+  const inputCls =
+    'border-0 border-b border-white/30 rounded-none bg-transparent px-0 pb-2 ' +
+    'text-white placeholder:text-white/35 ' +
+    'focus-visible:border-white/80 focus-visible:ring-0 focus-visible:ring-offset-0';
+
   if (bootstrapping) {
     return (
-      <div className="flex min-h-screen items-center justify-center px-4">
-        <p className="text-sm text-muted-foreground">Checking your session...</p>
+      <div className="flex min-h-screen items-center justify-center bg-black/80 text-white">
+        <div className="flex items-center gap-2 text-sm">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Checking your session...
+        </div>
       </div>
     );
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-background px-4 py-10">
-      <Card className="w-full max-w-md border border-border shadow-sm">
-        <CardContent className="pt-6">
-          <h1 className="text-2xl font-semibold text-foreground">
-            {mode === 'signup' ? 'Create account' : 'Sign in'}
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {mode === 'signup'
-              ? 'Join Herizone community with your email.'
-              : 'Welcome back. Sign in to continue.'}
-          </p>
+    <div className="relative h-screen w-screen overflow-hidden">
+      <div
+        className="absolute inset-0"
+        style={{
+          backgroundImage: "url('/image copy.png')",
+          backgroundSize: 'cover',
+          backgroundPosition: 'center 60%',
+          backgroundRepeat: 'no-repeat',
+        }}
+      />
 
-          <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+      <div className="absolute inset-0 bg-black/20" />
+
+      <div
+        className="absolute right-0 top-0 z-10 flex h-full w-full flex-col justify-center overflow-y-auto lg:w-[44%]"
+        style={{
+          background: 'rgba(255, 255, 255, 0.10)',
+          backdropFilter: 'blur(28px)',
+          WebkitBackdropFilter: 'blur(28px)',
+          borderLeft: '1px solid rgba(255, 255, 255, 0.18)',
+          boxShadow: '-12px 0 60px rgba(0,0,0,0.25)',
+        }}
+      >
+        <div className="mx-auto w-full max-w-lg space-y-8 px-10 py-12 lg:px-14">
+          <div className="space-y-1.5">
+            <h1 className="text-4xl font-semibold tracking-tight text-white">
+              {mode === 'signin' ? 'Welcome back' : 'Create account'}
+            </h1>
+            <p className="text-base text-white/55">
+              {mode === 'signin'
+                ? 'Please enter your details.'
+                : 'Join thousands of women supporting each other.'}
+            </p>
+          </div>
+
+          <form onSubmit={handleSubmit} className="space-y-5">
             {mode === 'signup' && (
-              <div className="space-y-1.5">
-                <Label htmlFor="name">Name</Label>
+              <div className="space-y-1">
+                <Label htmlFor="name" className="text-sm font-medium text-white/75">
+                  Name
+                </Label>
                 <Input
                   id="name"
+                  type="text"
+                  placeholder="Your name"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
+                  autoComplete="name"
+                  className={inputCls}
                   required
                   minLength={2}
                 />
               </div>
             )}
 
-            <div className="space-y-1.5">
-              <Label htmlFor="email">Email</Label>
+            <div className="space-y-1">
+              <Label htmlFor="email" className="text-sm font-medium text-white/75">
+                E-mail
+              </Label>
               <Input
                 id="email"
                 type="email"
+                placeholder="Enter your e-mail"
+                required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                required
                 autoComplete="email"
+                className={inputCls}
               />
             </div>
 
-            <div className="space-y-1.5">
-              <Label htmlFor="password">Password</Label>
+            <div className="space-y-1">
+              <Label htmlFor="password" className="text-sm font-medium text-white/75">
+                Password
+              </Label>
               <Input
                 id="password"
                 type="password"
+                placeholder="••••••••"
+                required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                required
-                minLength={8}
                 autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
+                className={inputCls}
               />
             </div>
 
+            {mode === 'signup' && (
+              <div className="space-y-1">
+                <Label htmlFor="confirm" className="text-sm font-medium text-white/75">
+                  Confirm Password
+                </Label>
+                <Input
+                  id="confirm"
+                  type="password"
+                  placeholder="••••••••"
+                  required
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  autoComplete="new-password"
+                  className={inputCls}
+                />
+              </div>
+            )}
+
+            {mode === 'signin' && (
+              <div className="flex items-center justify-between pt-1">
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="remember"
+                    className="border-white/35 data-[state=checked]:bg-primary data-[state=checked]:border-primary"
+                  />
+                  <label htmlFor="remember" className="cursor-pointer select-none text-sm text-white/60">
+                    Remember me
+                  </label>
+                </div>
+                <button type="button" className="text-sm text-white/60 transition-colors hover:text-white">
+                  Forgot your password?
+                </button>
+              </div>
+            )}
+
             {error && (
-              <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              <p className="rounded-lg border border-rose-400/30 bg-rose-500/15 px-3 py-2 text-sm text-rose-200">
                 {error}
               </p>
             )}
 
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? 'Please wait...' : mode === 'signup' ? 'Sign up' : 'Sign in'}
-            </Button>
+            <button
+              type="submit"
+              disabled={loading}
+              className="mt-1 flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-3 text-sm font-semibold text-white shadow-lg shadow-primary/30 transition-all hover:brightness-110 disabled:opacity-60"
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  {mode === 'signin' ? 'Signing in…' : 'Creating account…'}
+                </>
+              ) : mode === 'signin' ? (
+                'Log in'
+              ) : (
+                'Create account'
+              )}
+            </button>
           </form>
 
-          <button
-            type="button"
-            className="mt-4 text-sm text-primary hover:underline"
-            onClick={() => {
-              setError('');
-              setMode(mode === 'signup' ? 'signin' : 'signup');
-            }}
-          >
-            {mode === 'signup'
-              ? 'Already have an account? Sign in'
-              : "Don't have an account? Sign up"}
-          </button>
-        </CardContent>
-      </Card>
-    </main>
+          <p className="text-center text-sm text-white/45">
+            {mode === 'signin' ? (
+              <>
+                Don&apos;t have an account?{' '}
+                <button
+                  type="button"
+                  onClick={() => switchMode('signup')}
+                  className="font-semibold text-white transition-colors hover:text-primary"
+                >
+                  Register here
+                </button>
+              </>
+            ) : (
+              <>
+                Already have an account?{' '}
+                <button
+                  type="button"
+                  onClick={() => switchMode('signin')}
+                  className="font-semibold text-white transition-colors hover:text-primary"
+                >
+                  Sign in here
+                </button>
+              </>
+            )}
+          </p>
+        </div>
+      </div>
+    </div>
   );
 }

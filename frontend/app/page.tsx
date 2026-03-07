@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useAppStore } from '@/lib/store';
 import { refreshSession, verifyPayment } from '@/lib/api';
-import { Button } from '@/components/ui/button';
 import { Navbar } from '@/components/navbar';
 import { HomePage } from '@/components/home-page';
 import { DashboardPage } from '@/components/dashboard-page';
@@ -95,25 +94,48 @@ export default function App() {
 
     return (
       <div className="min-h-screen bg-background">
-        <header className="sticky top-0 z-50 border-b border-border bg-card/90 backdrop-blur-sm">
-          <div className="mx-auto flex h-16 w-full max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
-            <div className="flex items-center gap-2.5">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
-                <Heart className="h-4 w-4 text-primary-foreground" fill="currentColor" />
+        <header className="sticky top-0 z-50 w-full px-4 pt-4 pb-1 sm:px-8 sm:pt-5">
+          <div
+            className="mx-auto flex h-14 max-w-6xl items-center justify-between rounded-2xl px-4 sm:px-6 backdrop-blur-md shadow-sm"
+            style={{
+              background: 'rgba(253, 246, 244, 0.95)',
+              border: '1px solid #ecddd9',
+              boxShadow: '0 4px 24px rgba(203,151,142,0.10)',
+            }}
+          >
+            <div className="flex items-center gap-2.5 shrink-0">
+              <div
+                className="flex h-8 w-8 items-center justify-center rounded-xl shadow-sm"
+                style={{ background: 'linear-gradient(135deg, #D4B9B2, #CB978E)' }}
+              >
+                <Heart className="h-4 w-4 text-white" fill="currentColor" />
               </div>
-              <span className="text-base font-semibold tracking-tight text-foreground">Herizon</span>
+              <span className="text-base font-bold tracking-tight" style={{ color: '#3d2b27' }}>
+                Heri<span style={{ color: '#CB978E' }}>zone</span>
+              </span>
             </div>
             <div className="flex items-center gap-2">
-              <Button variant="ghost" size="sm" onClick={() => openAuth('signin')}>
+              <button
+                type="button"
+                onClick={() => openAuth('signin')}
+                className="hidden sm:inline-flex items-center rounded-full px-4 py-2 text-sm font-medium transition-colors hover:bg-white"
+                style={{ color: '#CB978E', border: '1px solid #D4B9B2' }}
+              >
                 Sign in
-              </Button>
-              <Button size="sm" onClick={() => openAuth('signup')}>
-                Sign up
-              </Button>
+              </button>
+              <button
+                type="button"
+                onClick={() => openAuth('signup')}
+                className="inline-flex items-center rounded-full px-4 py-2 text-sm font-semibold text-white shadow-sm transition-all hover:brightness-105"
+                style={{ background: '#CB978E' }}
+              >
+                Join free
+              </button>
             </div>
           </div>
         </header>
         <HomePage onGetStarted={() => openAuth('signup')} />
+        <Footer />
       </div>
     );
   }
