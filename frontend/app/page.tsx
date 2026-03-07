@@ -16,6 +16,8 @@ import { ChatbotWidget } from '@/components/chatbot-widget';
 import { Footer } from '@/components/footer';
 import { BackendSync } from '@/components/backend-sync';
 import { AuthGate } from '@/components/auth-gate';
+import type { Locale } from '@/lib/i18n';
+import { useLocale } from '@/components/locale-provider';
 import { Heart } from 'lucide-react';
 
 function normalizeConsultationMode(mode: unknown): 'chat' | 'voice' | 'video' | null {
@@ -28,6 +30,7 @@ function normalizeConsultationMode(mode: unknown): 'chat' | 'voice' | 'video' | 
 }
 
 export default function App() {
+  const { locale, setLocale, t } = useLocale();
   const { currentView, isAuthenticated, setAuthenticatedUser, setView, setActiveConsultation } = useAppStore();
   const [authRequested, setAuthRequested] = useState(false);
   const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin');
@@ -191,7 +194,7 @@ export default function App() {
   if (authBootstrapping) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
-        <p className="text-sm text-muted-foreground">Restoring your session...</p>
+        <p className="text-sm text-muted-foreground">{t('authHeader.restoring')}</p>
       </div>
     );
   }
@@ -223,13 +226,27 @@ export default function App() {
               </span>
             </div>
             <div className="flex items-center gap-2">
+              <div className="hidden items-center gap-1 rounded-full border border-[#ecddd9] bg-white p-1 sm:flex">
+                {(['en', 'am'] as Locale[]).map((lng) => (
+                  <button
+                    key={lng}
+                    type="button"
+                    onClick={() => setLocale(lng)}
+                    className={`rounded-full px-2.5 py-1 text-xs font-semibold transition-colors ${
+                      locale === lng ? 'bg-[#cb978e] text-white' : 'text-[#7a6360]'
+                    }`}
+                  >
+                    {lng === 'en' ? 'EN' : 'አማ'}
+                  </button>
+                ))}
+              </div>
               <button
                 type="button"
                 onClick={() => openAuth('signin')}
                 className="hidden sm:inline-flex items-center rounded-full px-4 py-2 text-sm font-medium transition-colors hover:bg-white"
                 style={{ color: '#CB978E', border: '1px solid #D4B9B2' }}
               >
-                Sign in
+                {t('authHeader.signIn')}
               </button>
               <button
                 type="button"
@@ -237,7 +254,7 @@ export default function App() {
                 className="inline-flex items-center rounded-full px-4 py-2 text-sm font-semibold text-white shadow-sm transition-all hover:brightness-105"
                 style={{ background: '#CB978E' }}
               >
-                Join free
+                {t('authHeader.joinFree')}
               </button>
             </div>
           </div>

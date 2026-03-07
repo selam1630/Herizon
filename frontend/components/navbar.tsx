@@ -9,6 +9,7 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
+import { useLocale } from '@/components/locale-provider';
 import { signOutSession } from '@/lib/api';
 import { useAppStore, type View } from '@/lib/store';
 import { BookOpen, Heart, Home, LogOut, Menu, MessageSquare, ShieldCheck, User, Users } from 'lucide-react';
@@ -19,18 +20,18 @@ const C1 = '#CAA69B';
 const C2 = '#CB978E';
 const C3 = '#D4B9B2';
 
-const baseNavItems: { label: string; view: View; icon: React.ReactNode }[] = [
-  { label: 'Home',        view: 'home',    icon: <Home        className="h-4 w-4" /> },
-  { label: 'Community',   view: 'feed',    icon: <Users       className="h-4 w-4" /> },
-  { label: 'Learn',       view: 'learn',   icon: <BookOpen    className="h-4 w-4" /> },
-  { label: 'Ask Experts', view: 'experts', icon: <MessageSquare className="h-4 w-4" /> },
-];
-
 export function Navbar() {
+  const { locale, setLocale, t } = useLocale();
   const { currentView, setView, currentUser, signOut } = useAppStore();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const baseNavItems: { label: string; view: View; icon: React.ReactNode }[] = [
+    { label: t('nav.home'), view: 'home', icon: <Home className="h-4 w-4" /> },
+    { label: t('nav.community'), view: 'feed', icon: <Users className="h-4 w-4" /> },
+    { label: t('nav.learn'), view: 'learn', icon: <BookOpen className="h-4 w-4" /> },
+    { label: t('nav.experts'), view: 'experts', icon: <MessageSquare className="h-4 w-4" /> },
+  ];
   const navItems = currentUser.isAdmin
-    ? [...baseNavItems, { label: 'Admin', view: 'admin' as View, icon: <ShieldCheck className="h-4 w-4" /> }]
+    ? [...baseNavItems, { label: t('nav.admin'), view: 'admin' as View, icon: <ShieldCheck className="h-4 w-4" /> }]
     : baseNavItems;
 
   const initials = currentUser?.name
@@ -56,7 +57,7 @@ export function Navbar() {
         <button
           onClick={() => setView('home')}
           className="flex items-center gap-2.5 shrink-0"
-          aria-label="Go to home"
+          aria-label={t('nav.goHome')}
         >
           {/* petal / heart mark */}
           <div
@@ -99,6 +100,26 @@ export function Navbar() {
 
         {/* ── Right side ───────────────────────────────────────────────── */}
         <div className="flex items-center gap-2.5">
+          <div className="hidden items-center gap-1 rounded-full border border-[#ecddd9] bg-white p-1 md:flex">
+            <button
+              type="button"
+              className={`rounded-full px-2.5 py-1 text-xs font-semibold transition-colors ${
+                locale === 'en' ? 'bg-[#cb978e] text-white' : 'text-[#7a6360]'
+              }`}
+              onClick={() => setLocale('en')}
+            >
+              EN
+            </button>
+            <button
+              type="button"
+              className={`rounded-full px-2.5 py-1 text-xs font-semibold transition-colors ${
+                locale === 'am' ? 'bg-[#cb978e] text-white' : 'text-[#7a6360]'
+              }`}
+              onClick={() => setLocale('am')}
+            >
+              አማ
+            </button>
+          </div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
@@ -131,7 +152,7 @@ export function Navbar() {
                 style={{ color: '#3d2b27' }}
               >
                 <User className="h-4 w-4" style={{ color: C1 }} />
-                My Profile
+                {t('nav.myProfile')}
               </DropdownMenuItem>
               <DropdownMenuSeparator style={{ background: '#ecddd9' }} />
               <DropdownMenuItem
@@ -139,7 +160,7 @@ export function Navbar() {
                 className="gap-2 cursor-pointer rounded-lg text-sm text-red-500"
               >
                 <LogOut className="h-4 w-4" />
-                Sign Out
+                {t('nav.signOut')}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -150,7 +171,7 @@ export function Navbar() {
               <button
                 className="flex h-9 w-9 items-center justify-center rounded-full md:hidden transition-colors"
                 style={{ border: `1px solid #ecddd9`, background: 'white' }}
-                aria-label="Open navigation menu"
+                aria-label={t('nav.openNav')}
               >
                 <Menu className="h-4 w-4" style={{ color: '#7a6360' }} />
               </button>
@@ -174,6 +195,26 @@ export function Navbar() {
               </div>
 
               <div className="flex flex-col gap-1">
+                <div className="mb-2 flex items-center gap-2 rounded-lg border border-[#ecddd9] bg-white px-3 py-2">
+                  <button
+                    type="button"
+                    className={`rounded-full px-2.5 py-1 text-xs font-semibold transition-colors ${
+                      locale === 'en' ? 'bg-[#cb978e] text-white' : 'text-[#7a6360]'
+                    }`}
+                    onClick={() => setLocale('en')}
+                  >
+                    EN
+                  </button>
+                  <button
+                    type="button"
+                    className={`rounded-full px-2.5 py-1 text-xs font-semibold transition-colors ${
+                      locale === 'am' ? 'bg-[#cb978e] text-white' : 'text-[#7a6360]'
+                    }`}
+                    onClick={() => setLocale('am')}
+                  >
+                    አማ
+                  </button>
+                </div>
                 {navItems.map((item) => {
                   const isActive = currentView === item.view;
                   return (

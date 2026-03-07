@@ -287,6 +287,9 @@ export async function fetchArticles(): Promise<Article[]> {
   });
 
   const data = (await response.json()) as { articles?: ApiArticle[]; message?: string };
+  if (response.status === 403) {
+    return [];
+  }
   if (!response.ok || !data.articles) {
     throw new Error(data.message || `Failed to load articles: ${response.status}`);
   }

@@ -1,7 +1,9 @@
 'use client';
 
 import { useAppStore, type View } from '@/lib/store';
+import { useLocale } from '@/components/locale-provider';
 import type { CSSProperties } from 'react';
+import type { Locale } from '@/lib/i18n';
 import {
     ArrowRight,
     BookOpen,
@@ -18,51 +20,137 @@ const C1 = '#CAA69B'; // warm rose-tan
 const C2 = '#CB978E'; // deep blush
 const C3 = '#D4B9B2'; // soft blush-pink
 
-const features = [
-  {
-    icon: Users,
-    title: 'Community Forum',
-    description:
-      'Connect with thousands of mothers navigating the same joys and challenges. Share, ask, and support each other anonymously or openly.',
-    view: 'feed' as const,
-    cta: 'Join the conversation',
-  },
-  {
-    icon: BookOpen,
-    title: 'Educational Library',
-    description:
-      'Evidence-based articles written by verified healthcare professionals on pregnancy, parenting, nutrition, and mental health.',
-    view: 'learn' as const,
-    cta: 'Browse articles',
-  },
-  {
-    icon: MessageSquare,
-    title: 'Expert Q&A',
-    description:
-      'Get personalized answers from verified OBs, pediatricians, lactation consultants, and child psychologists.',
-    view: 'experts' as const,
-    cta: 'Ask an expert',
-  },
-  {
-    icon: Sparkles,
-    title: 'AI Support',
-    description:
-      'Available 24/7, our AI assistant answers your questions instantly and connects you with relevant resources.',
-    action: 'chat' as const,
-    cta: 'Start chatting',
-  },
-];
+function getLandingContent(locale: Locale) {
+  if (locale === 'am') {
+    return {
+      browseResources: 'ምንጮችን ይመልከቱ',
+      trustBadges: [
+        { icon: Shield, text: 'በስም ሳይገለጥ መለጠፍ' },
+        { icon: Heart, text: 'የተጠበቀ እና የሚከታተል ማህበረሰብ' },
+        { icon: Sparkles, text: 'የባለሙያ ምላሽ በ48 ሰዓት' },
+      ],
+      stats: [
+        { value: '12,400', suffix: '+', label: 'የተገናኙ\nእናቶች' },
+        { value: '340', suffix: '+', label: 'የባለሙያ\nመልሶች' },
+        { value: '98', suffix: '+', label: 'የተመረጡ\nጽሁፎች' },
+        { value: '24/7', suffix: '', label: 'AI\nድጋፍ' },
+      ],
+      experienceTitle: 'የሄሪዞን',
+      experienceTitleAccent: 'ልምድ',
+      experienceBody1:
+        'የማህበረሰብ፣ የባለሙያ እና የAI ድጋፍ ባህሪያችን የእናትነት ጉዞን ቀላል እና ተደራሽ ያደርጋሉ።',
+      experienceBody2:
+        'ሁሉም ባህሪያት የተሰሩት በደህንነትዎ፣ በግላዊነትዎ እና በጤናዎ ላይ ትኩረት በማድረግ ነው።',
+      features: [
+        {
+          icon: Users,
+          title: 'የማህበረሰብ መድረክ',
+          description: 'ከሌሎች እናቶች ጋር በደህንነት ያጋሩ፣ ይጠይቁ እና ድጋፍ ያግኙ።',
+          view: 'feed' as const,
+          cta: 'ውይይቱን ይቀላቀሉ',
+        },
+        {
+          icon: BookOpen,
+          title: 'የትምህርት ቤተ-መጻሕፍት',
+          description: 'በተረጋገጡ የጤና ባለሙያዎች የተዘጋጁ ተማሪ ጽሁፎች።',
+          view: 'learn' as const,
+          cta: 'ጽሁፎችን ይመልከቱ',
+        },
+        {
+          icon: MessageSquare,
+          title: 'ባለሙያ ጥያቄና መልስ',
+          description: 'ከተረጋገጡ ባለሙያዎች የተለየ እና አስተማማኝ ምላሽ ያግኙ።',
+          view: 'experts' as const,
+          cta: 'ባለሙያ ይጠይቁ',
+        },
+        {
+          icon: Sparkles,
+          title: 'AI ድጋፍ',
+          description: '24/7 የሚሰራ የAI ረዳት ጥያቄዎትን ወዲያውኑ ይመልሳል።',
+          action: 'chat' as const,
+          cta: 'እንነጋገር',
+        },
+      ],
+      expertBadge: 'የባለሙያ አስተዋጽኦ',
+      expertTitle1: 'የጤና ባለሙያ',
+      expertTitle2: 'ነዎት?',
+      expertBody:
+        'በሄሪዞን እንደ ተረጋገጠ ባለሙያ ይቀላቀሉ፤ ትምህርታዊ ጽሁፎች ይጻፉ እና የማህበረሰብ ጥያቄዎችን ይመልሱ።',
+      expertPoints: ['የባለሙያ ጽሁፎች ይፃፉ', 'የQ&A ጥያቄዎችን ይመልሱ', 'የተረጋገጠ ባጅ ያግኙ'],
+      joinExpert: 'እንደ ባለሙያ ይቀላቀሉ',
+      reviewEta: 'ማመልከቻዎች በ48 ሰዓት ይገመገማሉ',
+    };
+  }
 
-const stats = [
-  { value: '12,400', suffix: '+', label: 'Mothers\nConnected' },
-  { value: '340', suffix: '+', label: 'Expert\nAnswers' },
-  { value: '98', suffix: '+', label: 'Curated\nArticles' },
-  { value: '24/7', suffix: '', label: 'AI\nSupport' },
-];
+  return {
+    browseResources: 'Browse Resources',
+    trustBadges: [
+      { icon: Shield, text: 'Anonymous posting' },
+      { icon: Heart, text: 'Moderated safe space' },
+      { icon: Sparkles, text: 'Expert replies in 48h' },
+    ],
+    stats: [
+      { value: '12,400', suffix: '+', label: 'Mothers\nConnected' },
+      { value: '340', suffix: '+', label: 'Expert\nAnswers' },
+      { value: '98', suffix: '+', label: 'Curated\nArticles' },
+      { value: '24/7', suffix: '', label: 'AI\nSupport' },
+    ],
+    experienceTitle: 'The Herizone',
+    experienceTitleAccent: 'Experience',
+    experienceBody1:
+      'Our suite of community, expert, and AI-powered tools makes navigating motherhood easy and accessible — from first trimester to toddler years and beyond.',
+    experienceBody2:
+      'Every feature is built with your safety, privacy, and wellbeing in mind. Join thousands of women who trust Herizone every day.',
+    features: [
+      {
+        icon: Users,
+        title: 'Community Forum',
+        description:
+          'Connect with thousands of mothers navigating the same joys and challenges. Share, ask, and support each other anonymously or openly.',
+        view: 'feed' as const,
+        cta: 'Join the conversation',
+      },
+      {
+        icon: BookOpen,
+        title: 'Educational Library',
+        description:
+          'Evidence-based articles written by verified healthcare professionals on pregnancy, parenting, nutrition, and mental health.',
+        view: 'learn' as const,
+        cta: 'Browse articles',
+      },
+      {
+        icon: MessageSquare,
+        title: 'Expert Q&A',
+        description:
+          'Get personalized answers from verified OBs, pediatricians, lactation consultants, and child psychologists.',
+        view: 'experts' as const,
+        cta: 'Ask an expert',
+      },
+      {
+        icon: Sparkles,
+        title: 'AI Support',
+        description:
+          'Available 24/7, our AI assistant answers your questions instantly and connects you with relevant resources.',
+        action: 'chat' as const,
+        cta: 'Start chatting',
+      },
+    ],
+    expertBadge: 'Expert Contributors',
+    expertTitle1: 'Are you a healthcare',
+    expertTitle2: 'professional?',
+    expertBody:
+      "Join Herizone as a verified expert — write evidence-based articles, answer community questions, and make a real impact on mothers' health journeys. OBs, midwives, pediatricians, nutritionists, and mental health professionals welcome.",
+    expertPoints: ['Publish expert articles', 'Answer Q&A questions', 'Verified expert badge'],
+    joinExpert: 'Join as Expert',
+    reviewEta: 'Applications reviewed within 48 hours',
+  };
+}
 
 export function HomePage({ onGetStarted }: { onGetStarted?: () => void }) {
+  const { locale, t } = useLocale();
   const { setView, setChatOpen } = useAppStore();
   const shouldShowAuth = typeof onGetStarted === 'function';
+  const copy = getLandingContent(locale);
 
   const handleJoinClick = () => {
     if (onGetStarted) {
@@ -217,18 +305,18 @@ export function HomePage({ onGetStarted }: { onGetStarted?: () => void }) {
             <div className="mb-5 flex items-center gap-2">
               <span className="h-2 w-2 rounded-full" style={{ background: C2 }} />
               <span className="text-xs font-bold uppercase tracking-widest" style={{ color: C2 }}>
-                Herizone Community
+                {t('home.eyebrow')}
               </span>
             </div>
 
             {/* headline */}
             <h1 className="text-balance text-[2.8rem] font-extrabold leading-[1.08] tracking-tight text-gray-800 sm:text-5xl lg:text-[3.4rem]">
-              You don&apos;t have
+              {t('home.title1')}
               <br />
-              to navigate{' '}
+              {t('home.title2')}{' '}
               <span className="relative inline-block">
                 <span className="relative z-10" style={{ color: C2 }}>
-                  motherhood
+                  {t('home.title3')}
                 </span>
                 <svg
                   aria-hidden="true"
@@ -241,11 +329,11 @@ export function HomePage({ onGetStarted }: { onGetStarted?: () => void }) {
                 </svg>
               </span>
               <br />
-              alone.
+              {t('home.title4')}
             </h1>
 
             <p className="mt-6 max-w-md text-base leading-relaxed text-gray-500">
-              Herizone connects mothers with a supportive community, trusted educational resources, verified healthcare experts, and an AI assistant — at every stage of the journey.
+              {t('home.subtitle')}
             </p>
 
             {/* CTAs */}
@@ -255,7 +343,7 @@ export function HomePage({ onGetStarted }: { onGetStarted?: () => void }) {
                 className="flex items-center gap-2 rounded-full px-7 py-3.5 text-sm font-semibold text-white shadow-md transition-all hover:brightness-105 active:scale-95"
                 style={{ background: C2 }}
               >
-                {shouldShowAuth ? 'Get Started' : 'Join the Community'}
+                {shouldShowAuth ? t('home.getStarted') : t('home.joinCommunity')}
                 <ArrowRight className="h-4 w-4" />
               </button>
               <button
@@ -264,17 +352,13 @@ export function HomePage({ onGetStarted }: { onGetStarted?: () => void }) {
                 style={{ borderColor: C1, color: C2 }}
               >
                 <BookOpen className="h-4 w-4" />
-                Browse Resources
+                {copy.browseResources}
               </button>
             </div>
 
             {/* trust badges */}
             <div className="mt-10 flex flex-wrap gap-5">
-              {[
-                { icon: Shield, text: 'Anonymous posting' },
-                { icon: Heart, text: 'Moderated safe space' },
-                { icon: Sparkles, text: 'Expert replies in 48h' },
-              ].map(({ icon: Icon, text }) => (
+              {copy.trustBadges.map(({ icon: Icon, text }) => (
                 <div key={text} className="flex items-center gap-1.5 text-sm text-gray-400">
                   <Icon className="h-3.5 w-3.5 shrink-0" style={{ color: C1 }} />
                   {text}
@@ -292,7 +376,7 @@ export function HomePage({ onGetStarted }: { onGetStarted?: () => void }) {
       >
         <div className="mx-auto max-w-5xl">
           <div className="grid grid-cols-2 gap-y-8 sm:grid-cols-4 sm:divide-x sm:gap-y-0" style={{ '--tw-divide-color': '#ecddd9' } as CSSProperties}>
-            {stats.map(({ value, suffix, label }) => (
+            {copy.stats.map(({ value, suffix, label }) => (
               <div key={label} className="flex flex-col items-center px-4 py-3">
                 <span className="text-5xl font-black leading-none tracking-tight sm:text-6xl" style={{ color: C3 }}>
                   {value}
@@ -314,26 +398,26 @@ export function HomePage({ onGetStarted }: { onGetStarted?: () => void }) {
           <div className="mb-20 grid gap-8 lg:grid-cols-2 lg:items-end">
             <div>
               <h2 className="text-4xl font-black leading-tight tracking-tight text-gray-800 sm:text-5xl">
-                The Herizone
+                {copy.experienceTitle}
                 <br />
                 <span className="font-light italic" style={{ color: C1 }}>
-                  Experience
+                  {copy.experienceTitleAccent}
                 </span>
               </h2>
             </div>
             <div className="lg:pb-2">
               <p className="text-sm leading-relaxed text-gray-400">
-                Our suite of community, expert, and AI-powered tools makes navigating motherhood easy and accessible — from first trimester to toddler years and beyond.
+                {copy.experienceBody1}
               </p>
               <p className="mt-3 text-sm leading-relaxed text-gray-400">
-                Every feature is built with your safety, privacy, and wellbeing in mind. Join thousands of women who trust Herizone every day.
+                {copy.experienceBody2}
               </p>
             </div>
           </div>
 
           {/* feature cards */}
           <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-            {features.map((feature, idx) => {
+            {copy.features.map((feature, idx) => {
               const Icon = feature.icon;
               const isHighlighted = idx === 0;
               const handleClick = () => {
@@ -437,27 +521,27 @@ export function HomePage({ onGetStarted }: { onGetStarted?: () => void }) {
             <div className="flex-1">
               <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-[#ecddd9] bg-white px-3.5 py-1.5 text-xs font-semibold" style={{ color: C2 }}>
                 <Stethoscope className="h-3.5 w-3.5" />
-                Expert Contributors
+                {copy.expertBadge}
               </div>
               <h2 className="text-3xl font-extrabold leading-tight tracking-tight text-gray-800 sm:text-4xl">
-                Are you a healthcare
+                {copy.expertTitle1}
                 <br />
-                <span style={{ color: C2 }}>professional?</span>
+                <span style={{ color: C2 }}>{copy.expertTitle2}</span>
               </h2>
               <p className="mt-4 max-w-md text-sm leading-relaxed text-gray-500">
-                Join Herizone as a verified expert — write evidence-based articles, answer community questions, and make a real impact on mothers' health journeys. OBs, midwives, pediatricians, nutritionists, and mental health professionals welcome.
+                {copy.expertBody}
               </p>
               <div className="mt-6 flex flex-wrap gap-4">
-                {[
-                  { icon: BookOpen, text: 'Publish expert articles' },
-                  { icon: MessageSquare, text: 'Answer Q&A questions' },
-                  { icon: Shield, text: 'Verified expert badge' },
-                ].map(({ icon: Icon, text }) => (
+                {copy.expertPoints.map((text, index) => {
+                  const icon = [BookOpen, MessageSquare, Shield][index] || Shield;
+                  const Icon = icon;
+                  return (
                   <div key={text} className="flex items-center gap-1.5 text-sm text-gray-500">
                     <Icon className="h-4 w-4 shrink-0" style={{ color: C1 }} />
                     {text}
                   </div>
-                ))}
+                  )
+                })}
               </div>
             </div>
 
@@ -469,11 +553,11 @@ export function HomePage({ onGetStarted }: { onGetStarted?: () => void }) {
                 style={{ background: `linear-gradient(135deg, ${C2}, ${C1})` }}
               >
                 <Stethoscope className="h-4 w-4" />
-                Join as Expert
+                {copy.joinExpert}
                 <ArrowRight className="h-4 w-4" />
               </button>
               <p className="text-xs text-gray-400 text-center lg:text-left">
-                Applications reviewed within 48 hours
+                {copy.reviewEta}
               </p>
             </div>
           </div>

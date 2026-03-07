@@ -1,5 +1,6 @@
 'use client';
 
+import { useLocale } from '@/components/locale-provider';
 import { useAppStore, type View } from '@/lib/store';
 import { Heart, Instagram, Mail, Twitter, Youtube } from 'lucide-react';
 import { useState } from 'react';
@@ -10,45 +11,6 @@ const C2 = '#CB978E';
 const C3 = '#D4B9B2';
 const BG = '#fdf6f4'; // warm cream — easy to read on
 
-const LINKS: { heading: string; items: { label: string; view?: View; href?: string }[] }[] = [
-  {
-    heading: 'Platform',
-    items: [
-      { label: 'Community', view: 'feed' },
-      { label: 'Learn', view: 'learn' },
-      { label: 'Ask Experts', view: 'experts' },
-      { label: 'My Profile', view: 'profile' },
-    ],
-  },
-  {
-    heading: 'Resources',
-    items: [
-      { label: 'Pregnancy Guide', view: 'learn' },
-      { label: 'Parenting Tips', view: 'learn' },
-      { label: 'Mental Health', view: 'learn' },
-      { label: 'Nutrition', view: 'learn' },
-    ],
-  },
-  {
-    heading: 'Company',
-    items: [
-      { label: 'About Herizone', href: '#' },
-      { label: 'Our Experts', href: '#' },
-      { label: 'Careers', href: '#' },
-      { label: 'Press', href: '#' },
-    ],
-  },
-  {
-    heading: 'Support',
-    items: [
-      { label: 'Help Center', href: '#' },
-      { label: 'Community Guidelines', href: '#' },
-      { label: 'Privacy Policy', href: '#' },
-      { label: 'Terms of Service', href: '#' },
-    ],
-  },
-];
-
 const SOCIALS = [
   { label: 'Instagram', icon: Instagram, href: '#' },
   { label: 'Twitter / X', icon: Twitter, href: '#' },
@@ -57,8 +19,88 @@ const SOCIALS = [
 ];
 
 export function Footer() {
+  const { locale } = useLocale();
   const { setView } = useAppStore();
   const [email, setEmail] = useState('');
+  const isAm = locale === 'am';
+
+  const LINKS: { heading: string; items: { label: string; view?: View; href?: string }[] }[] = isAm
+    ? [
+        {
+          heading: 'መድረክ',
+          items: [
+            { label: 'ማህበረሰብ', view: 'feed' },
+            { label: 'ትምህርት', view: 'learn' },
+            { label: 'ባለሙያ ይጠይቁ', view: 'experts' },
+            { label: 'ፕሮፋይሌ', view: 'profile' },
+          ],
+        },
+        {
+          heading: 'ምንጮች',
+          items: [
+            { label: 'የእርግዝና መመሪያ', view: 'learn' },
+            { label: 'የልጅ እንክብካቤ ምክሮች', view: 'learn' },
+            { label: 'የአእምሮ ጤና', view: 'learn' },
+            { label: 'ምግብ እና አመጋገብ', view: 'learn' },
+          ],
+        },
+        {
+          heading: 'ድርጅት',
+          items: [
+            { label: 'ስለ ሄሪዞን', href: '#' },
+            { label: 'የእኛ ባለሙያዎች', href: '#' },
+            { label: 'ሥራዎች', href: '#' },
+            { label: 'ሚዲያ', href: '#' },
+          ],
+        },
+        {
+          heading: 'ድጋፍ',
+          items: [
+            { label: 'የእርዳታ ማዕከል', href: '#' },
+            { label: 'የማህበረሰብ መመሪያዎች', href: '#' },
+            { label: 'የግላዊነት ፖሊሲ', href: '#' },
+            { label: 'የአገልግሎት ውል', href: '#' },
+          ],
+        },
+      ]
+    : [
+        {
+          heading: 'Platform',
+          items: [
+            { label: 'Community', view: 'feed' },
+            { label: 'Learn', view: 'learn' },
+            { label: 'Ask Experts', view: 'experts' },
+            { label: 'My Profile', view: 'profile' },
+          ],
+        },
+        {
+          heading: 'Resources',
+          items: [
+            { label: 'Pregnancy Guide', view: 'learn' },
+            { label: 'Parenting Tips', view: 'learn' },
+            { label: 'Mental Health', view: 'learn' },
+            { label: 'Nutrition', view: 'learn' },
+          ],
+        },
+        {
+          heading: 'Company',
+          items: [
+            { label: 'About Herizone', href: '#' },
+            { label: 'Our Experts', href: '#' },
+            { label: 'Careers', href: '#' },
+            { label: 'Press', href: '#' },
+          ],
+        },
+        {
+          heading: 'Support',
+          items: [
+            { label: 'Help Center', href: '#' },
+            { label: 'Community Guidelines', href: '#' },
+            { label: 'Privacy Policy', href: '#' },
+            { label: 'Terms of Service', href: '#' },
+          ],
+        },
+      ];
 
   return (
     <footer className="relative" style={{ background: BG }}>
@@ -77,7 +119,7 @@ export function Footer() {
               <button
                 onClick={() => setView('home')}
                 className="flex w-fit items-center gap-2"
-                aria-label="Go to Herizone home"
+                aria-label={isAm ? 'ወደ ሄሪዞን መነሻ ሂድ' : 'Go to Herizone home'}
               >
                 <div
                   className="flex h-8 w-8 items-center justify-center rounded-xl"
@@ -91,18 +133,20 @@ export function Footer() {
               </button>
 
               <p className="max-w-xs text-sm leading-relaxed" style={{ color: '#7a6360' }}>
-                A safe, supportive space for every mother — from the first trimester to toddlerhood and beyond.
+                {isAm
+                  ? 'ለእያንዳንዱ እናት የተዘጋጀ ደህንነታማ እና የሚደግፍ ቦታ።'
+                  : 'A safe, supportive space for every mother — from the first trimester to toddlerhood and beyond.'}
               </p>
 
               {/* Newsletter */}
               <div>
                 <p className="mb-2 text-[11px] font-bold uppercase tracking-widest" style={{ color: '#3d2b27' }}>
-                  Weekly Newsletter
+                  {isAm ? 'የሳምንቱ ዜና ደብዳቤ' : 'Weekly Newsletter'}
                 </p>
                 <div className="flex gap-2">
                   <input
                     type="email"
-                    placeholder="Your email"
+                    placeholder={isAm ? 'ኢሜይልዎ' : 'Your email'}
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     className="flex-1 rounded-xl border px-3 py-2 text-sm outline-none transition-all"
@@ -116,11 +160,11 @@ export function Footer() {
                     className="rounded-xl px-4 py-2 text-sm font-semibold text-white shadow-sm transition-all hover:brightness-105"
                     style={{ background: C2 }}
                   >
-                    Subscribe
+                    {isAm ? 'ይመዝገቡ' : 'Subscribe'}
                   </button>
                 </div>
                 <p className="mt-1 text-[11px]" style={{ color: '#b09490' }}>
-                  Tips, stories &amp; expert insights. No spam.
+                  {isAm ? 'ምክሮች፣ ታሪኮች እና የባለሙያ እይታዎች።' : 'Tips, stories & expert insights. No spam.'}
                 </p>
               </div>
 
@@ -180,16 +224,20 @@ export function Footer() {
             className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-2 px-6 py-4 text-xs lg:flex-row lg:px-10"
             style={{ color: '#b09490' }}
           >
-            <p>&copy; {new Date().getFullYear()} Herizone. All rights reserved.</p>
+            <p>
+              {isAm
+                ? `© ${new Date().getFullYear()} ሄሪዞን። መብቶች ሁሉ የተጠበቁ ናቸው።`
+                : `© ${new Date().getFullYear()} Herizone. All rights reserved.`}
+            </p>
             <div className="flex items-center gap-1.5">
-              <span>Made with</span>
+              <span>{isAm ? 'በፍቅር የተሰራ' : 'Made with'}</span>
               <Heart className="h-3 w-3" style={{ fill: C2, color: C2 }} />
-              <span>for every mother</span>
+              <span>{isAm ? 'ለሁሉም እናቶች' : 'for every mother'}</span>
             </div>
             <div className="flex items-center gap-4">
-              <a href="#" className="transition-colors hover:text-[#3d2b27]">Privacy</a>
-              <a href="#" className="transition-colors hover:text-[#3d2b27]">Terms</a>
-              <a href="#" className="transition-colors hover:text-[#3d2b27]">Cookies</a>
+              <a href="#" className="transition-colors hover:text-[#3d2b27]">{isAm ? 'ግላዊነት' : 'Privacy'}</a>
+              <a href="#" className="transition-colors hover:text-[#3d2b27]">{isAm ? 'ውል' : 'Terms'}</a>
+              <a href="#" className="transition-colors hover:text-[#3d2b27]">{isAm ? 'ኩኪዎች' : 'Cookies'}</a>
             </div>
           </div>
         </div>
