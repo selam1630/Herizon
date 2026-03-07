@@ -13,6 +13,8 @@ import {
   Shield,
   Clock,
   Star,
+  Lock,
+  Eye,
 } from 'lucide-react';
 
 // ─── Curated Unsplash photos of mothers / pregnancy ──────────────────────────
@@ -320,6 +322,38 @@ export function HomePage({ onGetStarted }: { onGetStarted?: () => void }) {
               </div>
             ))}
           </div>
+        </div>
+      </section>
+
+      {/* ── ACCESS GUIDE ─────────────────────────────────────────────────── */}
+      <section className="px-4 py-10 sm:px-6 lg:px-8">
+        <div className="mx-auto grid max-w-5xl gap-4 md:grid-cols-2">
+          <Card className="border-border">
+            <CardContent className="p-6">
+              <div className="mb-3 flex items-center gap-2">
+                <Eye className="h-4 w-4 text-primary" />
+                <h3 className="text-sm font-semibold text-foreground">Visible Without Login</h3>
+              </div>
+              <ul className="space-y-2 text-sm text-muted-foreground">
+                <li>Landing page and platform overview</li>
+                <li>Feature highlights and how support works</li>
+                <li>General public information</li>
+              </ul>
+            </CardContent>
+          </Card>
+          <Card className="border-border">
+            <CardContent className="p-6">
+              <div className="mb-3 flex items-center gap-2">
+                <Lock className="h-4 w-4 text-primary" />
+                <h3 className="text-sm font-semibold text-foreground">Requires Sign In</h3>
+              </div>
+              <ul className="space-y-2 text-sm text-muted-foreground">
+                <li>Community posts, comments, and anonymous posting</li>
+                <li>Asking questions to verified experts</li>
+                <li>Personalized dashboard, saved resources, and AI support history</li>
+              </ul>
+            </CardContent>
+          </Card>
         </div>
       </section>
 

@@ -1,4 +1,14 @@
-import type { Article, ArticleCategory, Comment, Post, PostCategory, User } from '@/lib/store';
+import type {
+  Answer,
+  Article,
+  ArticleCategory,
+  Comment,
+  ExpertTopic,
+  Post,
+  PostCategory,
+  Question,
+  User,
+} from '@/lib/store';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5000';
 let accessToken: string | null = null;
@@ -39,6 +49,28 @@ type ApiComment = {
   timestamp: string;
 };
 
+type ApiQuestion = {
+  id: string;
+  authorId: string;
+  author: string;
+  avatar: string;
+  question: string;
+  topic: ExpertTopic;
+  timestamp: string;
+  answerCount: number;
+  isAnonymous: boolean;
+};
+
+type ApiAnswer = {
+  id: string;
+  questionId: string;
+  expertId: string;
+  expert: string;
+  expertAvatar: string;
+  content: string;
+  timestamp: string;
+};
+
 type ApiUser = {
   id: string;
   name: string;
@@ -46,7 +78,74 @@ type ApiUser = {
   avatar: string;
   bio: string;
   isExpert: boolean;
+  isAdmin: boolean;
   createdAt: string;
+};
+
+export type AdminUser = {
+  id: string;
+  name: string;
+  email: string;
+  avatar: string;
+  bio: string;
+  isExpert: boolean;
+  isAdmin: boolean;
+  createdAt: Date;
+};
+
+export type AdminCommunityPost = {
+  id: string;
+  content: string;
+  category: PostCategory;
+  timestamp: Date;
+  isAnonymous: boolean;
+  author: string;
+};
+
+export type AdminExpertQuestion = {
+  id: string;
+  question: string;
+  topic: ExpertTopic;
+  timestamp: Date;
+  isAnonymous: boolean;
+  author: string;
+};
+
+export type VerifiedExpert = {
+  id: string;
+  name: string;
+  avatar: string;
+  specialty: string;
+  pricing: {
+    chat: number | null;
+    voice: number | null;
+    video: number | null;
+  };
+};
+
+export type ExpertApplicationStatus = 'pending' | 'approved' | 'rejected';
+
+export type ExpertApplication = {
+  id: string;
+  userId: string;
+  specialty: string;
+  credentials: string;
+  motivation: string;
+  pricing: {
+    chat: number | null;
+    voice: number | null;
+    video: number | null;
+  };
+  status: ExpertApplicationStatus;
+  reviewedNote: string;
+  reviewedAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+export type AdminExpertApplication = ExpertApplication & {
+  userName: string;
+  userEmail: string;
 };
 
 type AuthPayload = {
@@ -79,6 +178,20 @@ function toComment(item: ApiComment): Comment {
   };
 }
 
+function toQuestion(item: ApiQuestion): Question {
+  return {
+    ...item,
+    timestamp: new Date(item.timestamp),
+  };
+}
+
+function toAnswer(item: ApiAnswer): Answer {
+  return {
+    ...item,
+    timestamp: new Date(item.timestamp),
+  };
+}
+
 function toUser(user: ApiUser): User {
   return {
     id: user.id,
@@ -87,7 +200,30 @@ function toUser(user: ApiUser): User {
     avatar: user.avatar,
     bio: user.bio,
     isExpert: user.isExpert,
+    isAdmin: user.isAdmin,
     bookmarks: [],
+  };
+}
+
+function toAdminUser(user: Omit<AdminUser, 'createdAt'> & { createdAt: string }): AdminUser {
+  return {
+    ...user,
+    createdAt: new Date(user.createdAt),
+  };
+}
+
+function toExpertApplication(
+  item: Omit<ExpertApplication, 'reviewedAt' | 'createdAt' | 'updatedAt'> & {
+    reviewedAt: string | null;
+    createdAt: string;
+    updatedAt: string;
+  }
+): ExpertApplication {
+  return {
+    ...item,
+    reviewedAt: item.reviewedAt ? new Date(item.reviewedAt) : null,
+    createdAt: new Date(item.createdAt),
+    updatedAt: new Date(item.updatedAt),
   };
 }
 
@@ -275,4 +411,312 @@ export async function createCommunityComment(postId: string, content: string): P
     comment: toComment(data.comment),
     commentCount: Number(data.commentCount || 0),
   };
+}
+
+export async function fetchExpertData(): Promise<{
+  questions: Question[];
+  answers: Record<string, Answer[]>;
+}> {
+  const response = await fetch(`${API_BASE_URL}/api/v1/experts/questions`, {
+    cache: 'no-store',
+  });
+
+  const data = (await response.json()) as {
+    questions?: ApiQuestion[];
+    answers?: ApiAnswer[];
+    message?: string;
+  };
+
+  if (!response.ok || !data.questions || !data.answers) {
+    throw new Error(data.message || 'Failed to fetch expert data');
+  }
+
+  const answersByQuestion: Record<string, Answer[]> = {};
+  for (const answer of data.answers.map(toAnswer)) {
+    if (!answersByQuestion[answer.questionId]) {
+      answersByQuestion[answer.questionId] = [];
+    }
+    answersByQuestion[answer.questionId].push(answer);
+  }
+
+  return {
+    questions: data.questions.map(toQuestion),
+    answers: answersByQuestion,
+  };
+}
+
+export async function createExpertQuestion(body: {
+  question: string;
+  topic: ExpertTopic;
+  isAnonymous: boolean;
+}): Promise<Question> {
+  const response = await authRequest('/api/v1/experts/questions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+
+  const data = (await response.json()) as { question?: ApiQuestion; message?: string };
+  if (!response.ok || !data.question) {
+    throw new Error(data.message || 'Failed to create expert question');
+  }
+
+  return toQuestion(data.question);
+}
+
+export async function fetchVerifiedExperts(): Promise<VerifiedExpert[]> {
+  const response = await fetch(`${API_BASE_URL}/api/v1/experts/verified`, {
+    cache: 'no-store',
+  });
+
+  const data = (await response.json()) as { experts?: VerifiedExpert[]; message?: string };
+  if (!response.ok || !data.experts) {
+    throw new Error(data.message || 'Failed to load verified experts');
+  }
+
+  return data.experts;
+}
+
+export async function fetchMyExpertApplication(): Promise<ExpertApplication | null> {
+  const response = await authRequest('/api/v1/experts/applications/me', {
+    method: 'GET',
+  });
+
+  const data = (await response.json()) as {
+    application?: (Omit<ExpertApplication, 'reviewedAt' | 'createdAt' | 'updatedAt'> & {
+      reviewedAt: string | null;
+      createdAt: string;
+      updatedAt: string;
+    }) | null;
+    message?: string;
+  };
+
+  if (!response.ok) {
+    throw new Error(data.message || 'Failed to load expert application');
+  }
+
+  if (!data.application) {
+    return null;
+  }
+
+  return toExpertApplication(data.application);
+}
+
+export async function createExpertApplication(body: {
+  specialty: string;
+  credentials: string;
+  motivation?: string;
+}): Promise<ExpertApplication> {
+  const response = await authRequest('/api/v1/experts/applications', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+
+  const data = (await response.json()) as {
+    application?: Omit<ExpertApplication, 'reviewedAt' | 'createdAt' | 'updatedAt'> & {
+      reviewedAt: string | null;
+      createdAt: string;
+      updatedAt: string;
+    };
+    message?: string;
+  };
+
+  if (!response.ok || !data.application) {
+    throw new Error(data.message || 'Failed to submit expert application');
+  }
+
+  return toExpertApplication(data.application);
+}
+
+export async function fetchAdminUsers(onlyUnverifiedExperts = false): Promise<AdminUser[]> {
+  const suffix = onlyUnverifiedExperts ? '?onlyUnverifiedExperts=true' : '';
+  const response = await authRequest(`/api/v1/admin/users${suffix}`, {
+    method: 'GET',
+  });
+
+  const data = (await response.json()) as {
+    users?: Array<Omit<AdminUser, 'createdAt'> & { createdAt: string }>;
+    message?: string;
+  };
+  if (!response.ok || !data.users) {
+    throw new Error(data.message || 'Failed to load admin users');
+  }
+
+  return data.users.map(toAdminUser);
+}
+
+export async function updateUserRoles(
+  userId: string,
+  updates: { isExpert?: boolean; isAdmin?: boolean }
+): Promise<AdminUser> {
+  const response = await authRequest(`/api/v1/admin/users/${userId}/roles`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(updates),
+  });
+
+  const data = (await response.json()) as {
+    user?: Omit<AdminUser, 'createdAt'> & { createdAt: string };
+    message?: string;
+  };
+  if (!response.ok || !data.user) {
+    throw new Error(data.message || 'Failed to update user role');
+  }
+
+  return toAdminUser(data.user);
+}
+
+export async function fetchAdminCommunityPosts(): Promise<AdminCommunityPost[]> {
+  const response = await authRequest('/api/v1/admin/community/posts', {
+    method: 'GET',
+  });
+
+  const data = (await response.json()) as {
+    posts?: Array<Omit<AdminCommunityPost, 'timestamp'> & { timestamp: string }>;
+    message?: string;
+  };
+  if (!response.ok || !data.posts) {
+    throw new Error(data.message || 'Failed to load admin community posts');
+  }
+
+  return data.posts.map((post) => ({
+    ...post,
+    timestamp: new Date(post.timestamp),
+  }));
+}
+
+export async function deleteAdminCommunityPost(postId: string): Promise<void> {
+  const response = await authRequest(`/api/v1/admin/community/posts/${postId}`, {
+    method: 'DELETE',
+  });
+
+  if (!response.ok) {
+    const data = (await response.json()) as { message?: string };
+    throw new Error(data.message || 'Failed to delete community post');
+  }
+}
+
+export async function fetchAdminExpertQuestions(): Promise<AdminExpertQuestion[]> {
+  const response = await authRequest('/api/v1/admin/experts/questions', {
+    method: 'GET',
+  });
+
+  const data = (await response.json()) as {
+    questions?: Array<Omit<AdminExpertQuestion, 'timestamp'> & { timestamp: string }>;
+    message?: string;
+  };
+  if (!response.ok || !data.questions) {
+    throw new Error(data.message || 'Failed to load admin expert questions');
+  }
+
+  return data.questions.map((question) => ({
+    ...question,
+    timestamp: new Date(question.timestamp),
+  }));
+}
+
+export async function deleteAdminExpertQuestion(questionId: string): Promise<void> {
+  const response = await authRequest(`/api/v1/admin/experts/questions/${questionId}`, {
+    method: 'DELETE',
+  });
+
+  if (!response.ok) {
+    const data = (await response.json()) as { message?: string };
+    throw new Error(data.message || 'Failed to delete expert question');
+  }
+}
+
+export async function fetchAdminExpertApplications(): Promise<AdminExpertApplication[]> {
+  const response = await authRequest('/api/v1/admin/experts/applications', {
+    method: 'GET',
+  });
+
+  const data = (await response.json()) as {
+    applications?: Array<
+      Omit<AdminExpertApplication, 'reviewedAt' | 'createdAt' | 'updatedAt'> & {
+        reviewedAt: string | null;
+        createdAt: string;
+        updatedAt: string;
+      }
+    >;
+    message?: string;
+  };
+  if (!response.ok || !data.applications) {
+    throw new Error(data.message || 'Failed to load expert applications');
+  }
+
+  return data.applications.map((item) => ({
+    ...toExpertApplication(item),
+    userName: item.userName,
+    userEmail: item.userEmail,
+  }));
+}
+
+export async function reviewAdminExpertApplication(
+  applicationId: string,
+  review: { decision: 'approved' | 'rejected'; reviewedNote?: string }
+): Promise<AdminExpertApplication> {
+  const response = await authRequest(`/api/v1/admin/experts/applications/${applicationId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(review),
+  });
+
+  const data = (await response.json()) as {
+    application?: Omit<AdminExpertApplication, 'reviewedAt' | 'createdAt' | 'updatedAt'> & {
+      reviewedAt: string | null;
+      createdAt: string;
+      updatedAt: string;
+    };
+    message?: string;
+  };
+  if (!response.ok || !data.application) {
+    throw new Error(data.message || 'Failed to review application');
+  }
+
+  return {
+    ...toExpertApplication(data.application),
+    userName: data.application.userName,
+    userEmail: data.application.userEmail,
+  };
+}
+
+export type ExpertPricing = {
+  applicationId: string;
+  chat: number | null;
+  voice: number | null;
+  video: number | null;
+};
+
+export async function fetchMyExpertPricing(): Promise<ExpertPricing> {
+  const response = await authRequest('/api/v1/experts/me/pricing', {
+    method: 'GET',
+  });
+
+  const data = (await response.json()) as { pricing?: ExpertPricing; message?: string };
+  if (!response.ok || !data.pricing) {
+    throw new Error(data.message || 'Failed to load expert pricing');
+  }
+
+  return data.pricing;
+}
+
+export async function updateMyExpertPricing(body: {
+  chat: number;
+  voice: number;
+  video: number;
+}): Promise<ExpertPricing> {
+  const response = await authRequest('/api/v1/experts/me/pricing', {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+
+  const data = (await response.json()) as { pricing?: ExpertPricing; message?: string };
+  if (!response.ok || !data.pricing) {
+    throw new Error(data.message || 'Failed to update expert pricing');
+  }
+
+  return data.pricing;
 }

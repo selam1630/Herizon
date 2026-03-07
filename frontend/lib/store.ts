@@ -5,7 +5,7 @@ import { create } from 'zustand';
 export type PostCategory = 'pregnancy' | 'parenting' | 'health' | 'general';
 export type ArticleCategory = 'pregnancy' | 'parenting' | 'health' | 'nutrition';
 export type ExpertTopic = 'medical' | 'mental_health' | 'nutrition' | 'parenting';
-export type View = 'home' | 'feed' | 'learn' | 'experts' | 'profile';
+export type View = 'home' | 'feed' | 'learn' | 'experts' | 'admin' | 'profile';
 
 export interface User {
   id: string;
@@ -14,6 +14,7 @@ export interface User {
   avatar: string;
   bio: string;
   isExpert: boolean;
+  isAdmin: boolean;
   bookmarks: string[];
 }
 
@@ -135,6 +136,8 @@ interface AppStore {
   expertFilter: ExpertTopic | 'all';
   expertSearch: string;
   addQuestion: (q: Omit<Question, 'id' | 'timestamp' | 'answerCount'>) => void;
+  setQuestions: (questions: Question[]) => void;
+  setAnswers: (answers: Record<string, Answer[]>) => void;
   selectQuestion: (q: Question | null) => void;
   setExpertFilter: (filter: ExpertTopic | 'all') => void;
   setExpertSearch: (search: string) => void;
@@ -157,6 +160,7 @@ const mockUser: User = {
   avatar: '/placeholder-user.jpg',
   bio: 'First-time mom to a 6-month-old. Love connecting with other moms!',
   isExpert: false,
+  isAdmin: false,
   bookmarks: [],
 };
 
@@ -464,7 +468,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
     set({
       currentUser: user,
       isAuthenticated: true,
-      currentView: 'home',
+      currentView: user.isAdmin ? 'admin' : 'home',
     }),
   signOut: () =>
     set({
@@ -610,6 +614,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
       answers: { ...s.answers, [newQ.id]: [] },
     }));
   },
+  setQuestions: (questions) => set({ questions }),
+  setAnswers: (answers) => set({ answers }),
 
   selectQuestion: (q) => set({ selectedQuestion: q }),
   setExpertFilter: (filter) => set({ expertFilter: filter }),

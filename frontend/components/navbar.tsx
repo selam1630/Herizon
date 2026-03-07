@@ -12,10 +12,10 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
-import { Home, Users, BookOpen, MessageSquare, Menu, Heart, User, LogOut } from 'lucide-react';
+import { Home, Users, BookOpen, MessageSquare, Menu, Heart, User, LogOut, ShieldCheck } from 'lucide-react';
 import { useState } from 'react';
 
-const navItems: { label: string; view: View; icon: React.ReactNode }[] = [
+const baseNavItems: { label: string; view: View; icon: React.ReactNode }[] = [
   { label: 'Home', view: 'home', icon: <Home className="h-4 w-4" /> },
   { label: 'Community', view: 'feed', icon: <Users className="h-4 w-4" /> },
   { label: 'Learn', view: 'learn', icon: <BookOpen className="h-4 w-4" /> },
@@ -25,6 +25,9 @@ const navItems: { label: string; view: View; icon: React.ReactNode }[] = [
 export function Navbar() {
   const { currentView, setView, currentUser, signOut } = useAppStore();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const navItems = currentUser.isAdmin
+    ? [...baseNavItems, { label: 'Admin', view: 'admin' as View, icon: <ShieldCheck className="h-4 w-4" /> }]
+    : baseNavItems;
 
   const initials = currentUser.name
     .split(' ')

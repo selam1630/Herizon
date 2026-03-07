@@ -42,8 +42,49 @@ function toPublicUser(row) {
     avatar: row.avatar_url,
     bio: row.bio,
     isExpert: row.is_expert,
+    isAdmin: row.is_admin,
     createdAt: row.created_at,
   }
+}
+
+function getAdminEmails() {
+  return String(process.env.ADMIN_EMAILS || '')
+    .split(',')
+    .map((email) => email.trim().toLowerCase())
+    .filter(Boolean)
+}
+
+function isAdminEmail(email) {
+  return getAdminEmails().includes(String(email || '').trim().toLowerCase())
+}
+
+function getSeedAdminCredentials() {
+  const email = String(process.env.ADMIN_SEED_EMAIL || '').trim().toLowerCase()
+  const password = String(process.env.ADMIN_SEED_PASSWORD || '')
+  if (!email || !password) {
+    return null
+  }
+  return { email, password }
+}
+
+async function ensureSeedAdminUserExists(email) {
+  const seedAdmin = getSeedAdminCredentials()
+  const normalized = normalizeEmail(email)
+  if (!seedAdmin || seedAdmin.email !== normalized) {
+    return
+  }
+  const passwordHash = await bcrypt.hash(seedAdmin.password, 12)
+  await pool.query(
+    `
+      INSERT INTO users (id, name, email, password_hash, is_admin)
+      VALUES ($1, 'Admin', $2, $3, TRUE)
+      ON CONFLICT (email)
+      DO UPDATE SET
+        password_hash = EXCLUDED.password_hash,
+        is_admin = TRUE
+    `,
+    [randomUUID(), seedAdmin.email, passwordHash]
+  )
 }
 
 async function createSession(res, user) {
@@ -66,7 +107,7 @@ async function createSession(res, user) {
 async function findUserById(userId) {
   const result = await pool.query(
     `
-      SELECT id, name, email, avatar_url, bio, is_expert, created_at
+      SELECT id, name, email, avatar_url, bio, is_expert, is_admin, created_at
       FROM users
       WHERE id = $1
       LIMIT 1
@@ -105,11 +146,11 @@ router.post('/signup', async (req, res) => {
 
     const inserted = await pool.query(
       `
-        INSERT INTO users (id, name, email, password_hash)
-        VALUES ($1, $2, $3, $4)
-        RETURNING id, name, email, avatar_url, bio, is_expert, created_at
+        INSERT INTO users (id, name, email, password_hash, is_admin)
+        VALUES ($1, $2, $3, $4, $5)
+        RETURNING id, name, email, avatar_url, bio, is_expert, is_admin, created_at
       `,
-      [id, name, email, passwordHash]
+      [id, name, email, passwordHash, isAdminEmail(email)]
     )
 
     const user = toPublicUser(inserted.rows[0])
@@ -130,9 +171,11 @@ router.post('/signin', async (req, res) => {
       return res.status(400).json({ message: 'Email and password are required' })
     }
 
+    await ensureSeedAdminUserExists(email)
+
     const result = await pool.query(
       `
-        SELECT id, name, email, avatar_url, bio, is_expert, created_at, password_hash
+        SELECT id, name, email, avatar_url, bio, is_expert, is_admin, created_at, password_hash
         FROM users
         WHERE email = $1
         LIMIT 1
@@ -145,10 +188,26 @@ router.post('/signin', async (req, res) => {
     }
 
     const row = result.rows[0]
-    const validPassword = await bcrypt.compare(password, row.password_hash)
+    let validPassword = await bcrypt.compare(password, row.password_hash)
+
+    if (!validPassword) {
+      const seedAdmin = getSeedAdminCredentials()
+      if (seedAdmin && seedAdmin.email === email) {
+        const resetHash = await bcrypt.hash(seedAdmin.password, 12)
+        await pool.query('UPDATE users SET password_hash = $1, is_admin = TRUE WHERE id = $2', [resetHash, row.id])
+        row.password_hash = resetHash
+        row.is_admin = true
+        validPassword = await bcrypt.compare(password, row.password_hash)
+      }
+    }
 
     if (!validPassword) {
       return res.status(401).json({ message: 'Invalid email or password' })
+    }
+
+    if (isAdminEmail(row.email) && !row.is_admin) {
+      await pool.query('UPDATE users SET is_admin = TRUE WHERE id = $1', [row.id])
+      row.is_admin = true
     }
 
     const user = toPublicUser(row)

@@ -10,10 +10,10 @@ import { Label } from '@/components/ui/label';
 
 type Mode = 'signin' | 'signup';
 
-export function AuthGate() {
+export function AuthGate({ initialMode = 'signin' }: { initialMode?: Mode }) {
   const setAuthenticatedUser = useAppStore((s) => s.setAuthenticatedUser);
 
-  const [mode, setMode] = useState<Mode>('signin');
+  const [mode, setMode] = useState<Mode>(initialMode);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -35,6 +35,10 @@ export function AuthGate() {
 
     bootstrapAuth();
   }, [setAuthenticatedUser]);
+
+  useEffect(() => {
+    setMode(initialMode);
+  }, [initialMode]);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
